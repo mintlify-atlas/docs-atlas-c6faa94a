@@ -1,0 +1,140 @@
+{
+  "projectType": "framework",
+  "projectName": "Oxc",
+  "projectDescription": "A collection of high-performance JavaScript and TypeScript tools written in Rust",
+  "theme": "aspen",
+  "primaryColor": "#747474",
+  "lightColor": "#0b0b0b",
+  "darkColor": "#b5b5b5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "index",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/design-principles",
+              "architecture/performance"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "tools/linter",
+              "tools/formatter",
+              "tools/parser",
+              "tools/transformer",
+              "tools/minifier",
+              "tools/resolver"
+            ]
+          },
+          {
+            "group": "Using Oxc",
+            "pages": [
+              "guide/cli-usage",
+              "guide/configuration",
+              "guide/nodejs-integration",
+              "guide/rust-integration"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/ast",
+              "concepts/allocator",
+              "concepts/semantic-analysis",
+              "concepts/visitor-pattern"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Node.js APIs",
+            "pages": [
+              "api/parser",
+              "api/transform",
+              "api/minify"
+            ]
+          },
+          {
+            "group": "Rust APIs",
+            "pages": [
+              "api/rust/parser",
+              "api/rust/semantic",
+              "api/rust/linter",
+              "api/rust/transformer",
+              "api/rust/minifier",
+              "api/rust/codegen"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "api/cli/oxlint",
+              "api/cli/oxfmt"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Contributing",
+        "groups": [
+          {
+            "group": "Development",
+            "pages": [
+              "contribute/getting-started",
+              "contribute/architecture",
+              "contribute/testing",
+              "contribute/adding-rules"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "contribute/code-of-conduct",
+              "contribute/faq"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "High-performance JavaScript/TypeScript parser with full ES2024+ support",
+    "ESLint-compatible linter (oxlint) with 200+ built-in rules",
+    "Fast code formatter (oxfmt) compatible with Prettier",
+    "Code transformer for TypeScript, JSX, and modern JavaScript",
+    "JavaScript minifier with dead code elimination and constant folding",
+    "Module resolver for Node.js-style resolution",
+    "Modular architecture - use components independently or together",
+    "Available as Rust crates and Node.js packages (NAPI bindings)"
+  ],
+  "publicApiSurface": [
+    "oxlint - CLI linter with ESLint compatibility",
+    "oxfmt - CLI formatter with Prettier compatibility",
+    "oxc-parser - Node.js parser API (parseSync)",
+    "oxc-transform - Node.js transformation API (transform)",
+    "oxc-minify - Node.js minification API (minify)",
+    "oxc_parser - Rust parser crate",
+    "oxc_semantic - Rust semantic analysis crate",
+    "oxc_linter - Rust linter engine crate",
+    "oxc_transformer - Rust transformer crate",
+    "oxc_minifier - Rust minifier crate",
+    "oxc_codegen - Rust code generator crate",
+    "oxc_ast - Rust AST definitions crate",
+    "oxc_allocator - Rust arena allocator crate"
+  ]
+}
