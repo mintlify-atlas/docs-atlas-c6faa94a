@@ -1,0 +1,723 @@
+---
+title: oxfmt CLI Reference
+description: Complete command-line reference for oxfmt, Oxc's high-performance code formatter
+---
+
+# oxfmt CLI Reference
+
+oxfmt is a high-performance code formatter for JavaScript, TypeScript, JSX, TSX, and more. It's designed to be compatible with Prettier while offering improved performance and additional features.
+
+## Installation
+
+```bash
+npm install -D oxfmt
+# or
+pnpm add -D oxfmt
+# or
+yarn add -D oxfmt
+```
+
+## Basic Usage
+
+```bash
+# Format current directory (writes changes)
+oxfmt
+
+# Format specific files or directories
+oxfmt src/
+oxfmt file1.js file2.ts
+
+# Check formatting without writing
+oxfmt --check src/
+
+# List files that need formatting
+oxfmt --list-different src/
+```
+
+## Commands
+
+### Default Command (Format)
+
+The default command formats files and writes them in place.
+
+```bash
+oxfmt [OPTIONS] [PATH...]
+```
+
+If no paths are provided, formats the current working directory.
+
+### Special Commands
+
+<ParamField path="--init" type="flag">
+  Initialize `.oxfmtrc.json` configuration file with default values.
+  
+  ```bash
+  oxfmt --init
+  ```
+</ParamField>
+
+<ParamField path="--migrate" type="string">
+  Migrate configuration from another formatter to `.oxfmtrc.json`.
+  
+  Available sources:
+  - `prettier` - Migrate from Prettier configuration
+  - `biome` - Migrate from Biome configuration
+  
+  ```bash
+  oxfmt --migrate prettier
+  ```
+</ParamField>
+
+<ParamField path="--lsp" type="flag">
+  Start Language Server Protocol (LSP) server for editor integration.
+  
+  ```bash
+  oxfmt --lsp
+  ```
+</ParamField>
+
+<ParamField path="--stdin-filepath" type="path">
+  Specify file name for stdin input to infer which parser to use.
+  
+  ```bash
+  cat file.ts | oxfmt --stdin-filepath file.ts
+  ```
+</ParamField>
+
+## Output Mode Options
+
+<ParamField path="--write" type="flag" default="true">
+  Format and write files in place (default behavior).
+  
+  This is the default mode when no output option is specified.
+  
+  ```bash
+  oxfmt --write src/
+  # or simply
+  oxfmt src/
+  ```
+</ParamField>
+
+<ParamField path="--check" type="flag">
+  Check if files are formatted without writing changes.
+  
+  Displays statistics and exits with error code if files need formatting.
+  Useful for CI/CD pipelines.
+  
+  ```bash
+  oxfmt --check src/
+  ```
+</ParamField>
+
+<ParamField path="--list-different" type="flag">
+  List files that would be changed by formatting.
+  
+  Does not write changes or show statistics. Outputs only file paths.
+  
+  ```bash
+  oxfmt --list-different src/
+  ```
+</ParamField>
+
+## Configuration Options
+
+<ParamField path="-c, --config" type="path">
+  Path to the configuration file.
+  
+  If not specified, oxfmt searches for `.oxfmtrc.json` in the current directory and parent directories.
+  
+  ```bash
+  oxfmt --config custom-config.json src/
+  ```
+</ParamField>
+
+## Ignore Options
+
+<ParamField path="--ignore-path" type="path">
+  Path to ignore file(s). Can be specified multiple times.
+  
+  If not specified, `.gitignore` and `.prettierignore` in the current directory are used automatically.
+  
+  ```bash
+  oxfmt --ignore-path .gitignore --ignore-path .customignore src/
+  ```
+</ParamField>
+
+<ParamField path="--with-node-modules" type="flag">
+  Format code in `node_modules` directory.
+  
+  By default, `node_modules` is skipped.
+  
+  ```bash
+  oxfmt --with-node-modules
+  ```
+</ParamField>
+
+## Runtime Options
+
+<ParamField path="--no-error-on-unmatched-pattern" type="flag">
+  Do not exit with error when pattern is unmatched.
+  
+  By default, oxfmt exits with error code 2 if no files match the provided patterns.
+  
+  ```bash
+  oxfmt --no-error-on-unmatched-pattern 'src/**/*.jsx'
+  ```
+</ParamField>
+
+<ParamField path="--threads" type="number">
+  Number of threads to use for formatting.
+  
+  Set to 1 to use only 1 CPU core. By default, uses all available CPU cores.
+  
+  ```bash
+  oxfmt --threads 4 src/
+  ```
+</ParamField>
+
+## Path Arguments
+
+Paths can be files, directories, or glob patterns.
+
+```bash
+# Single file
+oxfmt src/index.ts
+
+# Multiple files
+oxfmt src/file1.js src/file2.ts
+
+# Directory
+oxfmt src/
+
+# Glob patterns (must be quoted)
+oxfmt 'src/**/*.{js,ts,jsx,tsx}'
+
+# Exclude patterns with ! prefix
+oxfmt 'src/**/*.js' '!src/**/*.test.js'
+```
+
+**Note**: PATH must not contain `..` (parent directory references).
+
+## Exit Codes
+
+oxfmt uses the following exit codes:
+
+| Exit Code | Meaning |
+|-----------|--------|
+| 0 | Success - all files properly formatted |
+| 1 | Format mismatch - files need formatting (in `--check` or `--list-different` mode), or invalid configuration |
+| 2 | Fatal error - no files found or formatting failed |
+
+Exit codes in detail:
+
+- **0 (Success)**
+  - All files are properly formatted (or were formatted successfully)
+  - No files matched with `--no-error-on-unmatched-pattern` flag
+  - Special commands (`--init`, `--migrate`, `--lsp`) succeeded
+
+- **1 (Warning/Mismatch)**
+  - Configuration file is invalid
+  - Files need formatting (when using `--check` or `--list-different`)
+
+- **2 (Fatal Error)**
+  - No files found matching the given patterns
+  - Formatting failed due to syntax errors or other issues
+
+## Configuration File
+
+oxfmt uses `.oxfmtrc.json` for configuration. The format is compatible with Prettier's options.
+
+### Example `.oxfmtrc.json`
+
+```json
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "insertFinalNewline": true
+}
+```
+
+### Configuration Options
+
+#### Core Formatting Options
+
+<ParamField path="printWidth" type="number" default="100">
+  Specify the line length that the formatter will wrap on.
+  
+  Corresponds to Prettier's `printWidth`. Overrides `.editorconfig.max_line_length`.
+</ParamField>
+
+<ParamField path="tabWidth" type="number" default="2">
+  Specify the number of spaces per indentation level.
+  
+  Overrides `.editorconfig.indent_size`.
+</ParamField>
+
+<ParamField path="useTabs" type="boolean" default="false">
+  Indent lines with tabs instead of spaces.
+  
+  Overrides `.editorconfig.indent_style`.
+</ParamField>
+
+<ParamField path="endOfLine" type="string" default="lf">
+  Which end of line characters to apply.
+  
+  Options:
+  - `"lf"` - Line Feed only (\n), common on Linux and macOS
+  - `"crlf"` - Carriage Return + Line Feed (\r\n), common on Windows
+  - `"cr"` - Carriage Return only (\r)
+  
+  Note: `"auto"` is not supported.
+  
+  Overrides `.editorconfig.end_of_line`.
+</ParamField>
+
+#### Quote and Punctuation Options
+
+<ParamField path="singleQuote" type="boolean" default="false">
+  Use single quotes instead of double quotes.
+  
+  For JSX, use `jsxSingleQuote` instead.
+</ParamField>
+
+<ParamField path="jsxSingleQuote" type="boolean" default="false">
+  Use single quotes instead of double quotes in JSX.
+</ParamField>
+
+<ParamField path="quoteProps" type="string" default="as-needed">
+  Change when properties in objects are quoted.
+  
+  Options:
+  - `"as-needed"` - Only add quotes around object properties when required
+  - `"consistent"` - If at least one property requires quotes, quote all properties
+  - `"preserve"` - Respect the input formatting
+</ParamField>
+
+<ParamField path="trailingComma" type="string" default="all">
+  Print trailing commas wherever possible in multi-line comma-separated structures.
+  
+  Options:
+  - `"all"` - Trailing commas wherever possible
+  - `"es5"` - Trailing commas where valid in ES5 (objects, arrays)
+  - `"none"` - No trailing commas
+  
+  Note: Single-line arrays never get trailing commas.
+</ParamField>
+
+<ParamField path="semi" type="boolean" default="true">
+  Print semicolons at the ends of statements.
+  
+  - `true` - Add semicolons (default)
+  - `false` - Only add semicolons at the beginning of lines that may introduce ASI failures
+</ParamField>
+
+#### Spacing and Layout Options
+
+<ParamField path="bracketSpacing" type="boolean" default="true">
+  Print spaces between brackets in object literals.
+  
+  - `true` - `{ foo: bar }` (default)
+  - `false` - `{foo: bar}`
+</ParamField>
+
+<ParamField path="bracketSameLine" type="boolean" default="false">
+  Put the `>` of a multi-line HTML element at the end of the last line instead of on the next line.
+  
+  Applies to HTML, JSX, Vue, and Angular. Does not apply to self-closing elements.
+  
+  ```jsx
+  // bracketSameLine: false (default)
+  <button
+    className="btn"
+    onClick={handleClick}
+  >
+    Click me
+  </button>
+  
+  // bracketSameLine: true
+  <button
+    className="btn"
+    onClick={handleClick}>
+    Click me
+  </button>
+  ```
+</ParamField>
+
+<ParamField path="arrowParens" type="string" default="always">
+  Include parentheses around a sole arrow function parameter.
+  
+  Options:
+  - `"always"` - Always include parentheses (default)
+  - `"avoid"` - Omit parentheses when possible
+  
+  ```javascript
+  // "always"
+  (x) => x
+  
+  // "avoid"
+  x => x
+  ```
+</ParamField>
+
+<ParamField path="singleAttributePerLine" type="boolean" default="false">
+  Enforce single attribute per line in HTML, Vue, and JSX.
+  
+  ```jsx
+  // false (default) - attributes can be on same line
+  <button className="btn" onClick={handleClick}>Click</button>
+  
+  // true - each attribute on separate line
+  <button
+    className="btn"
+    onClick={handleClick}
+  >
+    Click
+  </button>
+  ```
+</ParamField>
+
+#### Advanced Options
+
+<ParamField path="objectWrap" type="string" default="preserve">
+  How to wrap object literals when they could fit on one line or span multiple lines.
+  
+  Options:
+  - `"preserve"` - Format as multi-line if there's a newline before the first property (default)
+  - `"always"` - Always format objects as multi-line
+  - `"never"` - Always format objects on one line if possible
+  
+  By default, formats objects as multi-line if there's a newline prior to the first property, allowing authors to use this as a readability hint.
+</ParamField>
+
+<ParamField path="embeddedLanguageFormatting" type="string" default="auto">
+  Control whether to format embedded code (CSS-in-JS, JS-in-Vue, etc.).
+  
+  Options:
+  - `"auto"` - Format embedded code if the formatter can (default)
+  - `"off"` - Never format embedded code
+  
+  Note: XXX-in-JS support is incomplete.
+</ParamField>
+
+#### Markdown Options
+
+<ParamField path="proseWrap" type="string" default="preserve">
+  How to wrap prose in Markdown.
+  
+  Options:
+  - `"preserve"` - Wrap prose as-is (default)
+  - `"always"` - Wrap prose to print width
+  - `"never"` - Never wrap prose (use soft wrapping)
+  
+  By default, oxfmt doesn't change wrapping in Markdown since some services use linebreak-sensitive rendering (e.g., GitHub comments).
+</ParamField>
+
+#### HTML/Vue Options
+
+<ParamField path="htmlWhitespaceSensitivity" type="string" default="css">
+  Specify global whitespace sensitivity for HTML, Vue, Angular, and Handlebars.
+  
+  Options:
+  - `"css"` - Respect CSS display property (default)
+  - `"strict"` - All whitespace is significant
+  - `"ignore"` - All whitespace is insignificant
+</ParamField>
+
+<ParamField path="vueIndentScriptAndStyle" type="boolean" default="false">
+  Whether to indent code inside `<script>` and `<style>` tags in Vue files.
+</ParamField>
+
+#### Oxfmt Extensions
+
+<ParamField path="insertFinalNewline" type="boolean" default="true">
+  Whether to insert a final newline at the end of the file.
+  
+  Overrides `.editorconfig.insert_final_newline`.
+</ParamField>
+
+### File Overrides
+
+You can specify different formatting options for specific files using the `overrides` array.
+
+```json
+{
+  "printWidth": 100,
+  "singleQuote": false,
+  "overrides": [
+    {
+      "files": ["*.test.js", "*.spec.js"],
+      "options": {
+        "printWidth": 120
+      }
+    },
+    {
+      "files": ["src/legacy/**/*.js"],
+      "excludeFiles": ["src/legacy/vendor/**"],
+      "options": {
+        "singleQuote": true,
+        "semi": false
+      }
+    }
+  ]
+}
+```
+
+### Ignore Patterns
+
+You can specify files to ignore in the configuration file:
+
+```json
+{
+  "ignorePatterns": [
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    "**/*.min.js"
+  ]
+}
+```
+
+## EditorConfig Support
+
+oxfmt respects `.editorconfig` files when present. Configuration file options take precedence over EditorConfig.
+
+Supported EditorConfig properties:
+- `indent_style` (overridden by `useTabs`)
+- `indent_size` (overridden by `tabWidth`)
+- `end_of_line` (overridden by `endOfLine`)
+- `max_line_length` (overridden by `printWidth`)
+- `insert_final_newline` (overridden by `insertFinalNewline`)
+
+## Integration Examples
+
+### CI/CD Integration
+
+#### GitHub Actions
+
+```yaml
+name: Format Check
+
+on: [push, pull_request]
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm install
+      - run: npx oxfmt --check src/
+```
+
+#### GitLab CI
+
+```yaml
+format:
+  script:
+    - npm install
+    - npx oxfmt --check src/
+```
+
+### Pre-commit Hook
+
+#### Using Husky
+
+```json
+// package.json
+{
+  "scripts": {
+    "prepare": "husky install"
+  }
+}
+```
+
+```bash
+# .husky/pre-commit
+npx oxfmt
+```
+
+#### Using lint-staged
+
+```json
+// package.json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,css,md}": "oxfmt"
+  }
+}
+```
+
+### NPM Scripts
+
+```json
+{
+  "scripts": {
+    "format": "oxfmt src/",
+    "format:check": "oxfmt --check src/",
+    "format:list": "oxfmt --list-different src/"
+  }
+}
+```
+
+### VS Code Integration
+
+Create `.vscode/settings.json`:
+
+```json
+{
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true
+}
+```
+
+## Supported File Types
+
+oxfmt can format the following file types:
+
+- JavaScript (`.js`, `.mjs`, `.cjs`)
+- TypeScript (`.ts`, `.mts`, `.cts`)
+- JSX (`.jsx`)
+- TSX (`.tsx`)
+- JSON (`.json`)
+- JSONC (`.jsonc`) - JSON with comments
+- Vue (`.vue`)
+- Markdown (`.md`)
+- HTML (`.html`)
+- CSS (`.css`)
+- TOML (`.toml`)
+
+## Performance Tips
+
+1. **Use Multiple Threads**: oxfmt automatically uses all available CPU cores for optimal performance.
+
+2. **Target Specific Directories**: Format only the directories you need:
+   ```bash
+   oxfmt src/ lib/
+   ```
+
+3. **Use Ignore Files**: Properly configure `.prettierignore` or `.gitignore` to skip unnecessary files:
+   ```
+   # .prettierignore
+   node_modules
+   dist
+   build
+   *.min.js
+   coverage
+   ```
+
+4. **Check Before Format**: Use `--check` in CI to avoid unnecessary writes:
+   ```bash
+   oxfmt --check src/
+   ```
+
+5. **Format Changed Files Only**: In CI, format only changed files:
+   ```bash
+   git diff --name-only --diff-filter=ACMR main... | grep '\.\(js\|ts\|jsx\|tsx\)$' | xargs oxfmt --check
+   ```
+
+## Common Use Cases
+
+### Format Everything
+
+```bash
+oxfmt .
+```
+
+### Check Formatting in CI
+
+```bash
+oxfmt --check src/
+```
+
+### Format Specific File Types
+
+```bash
+oxfmt 'src/**/*.{js,ts,jsx,tsx}'
+```
+
+### Format with Custom Config
+
+```bash
+oxfmt --config .oxfmtrc.production.json src/
+```
+
+### List Unformatted Files
+
+```bash
+oxfmt --list-different src/
+```
+
+### Format Stdin
+
+```bash
+echo 'const x={a:1,b:2}' | oxfmt --stdin-filepath file.js
+```
+
+### Migrate from Prettier
+
+```bash
+# Generate .oxfmtrc.json from .prettierrc
+oxfmt --migrate prettier
+
+# Then use oxfmt normally
+oxfmt src/
+```
+
+## Differences from Prettier
+
+While oxfmt aims to be compatible with Prettier, there are some differences:
+
+1. **Default Print Width**: oxfmt defaults to `100` instead of Prettier's `80`
+2. **Default Trailing Commas**: oxfmt defaults to `"all"` instead of Prettier's `"es5"`
+3. **Performance**: oxfmt is significantly faster, especially on large codebases
+4. **Additional Options**: oxfmt includes extensions like `insertFinalNewline` and `objectWrap`
+5. **EditorConfig**: oxfmt has deeper EditorConfig integration
+
+## Troubleshooting
+
+### No Files Found
+
+If oxfmt reports no files found:
+
+1. Check ignore patterns in `.prettierignore` or `.gitignore`
+2. Verify paths are correct
+3. Use `--with-node-modules` if you need to format dependencies
+4. Add `--no-error-on-unmatched-pattern` to suppress the error
+
+### Configuration Not Loading
+
+1. Ensure `.oxfmtrc.json` is in the correct location
+2. Check JSON syntax is valid (use a JSON validator)
+3. Use `--config` to specify path explicitly
+4. Check for conflicting `.editorconfig` settings
+
+### Formatting Errors
+
+If oxfmt fails to format files:
+
+1. Check for syntax errors in source files
+2. Verify file extension is supported
+3. Check for invalid configuration options
+4. Try formatting individual files to isolate the issue
+
+### Performance Issues
+
+1. Use `--threads 1` to test single-threaded performance
+2. Check ignore patterns are optimized
+3. Ensure you're not formatting unnecessary files (e.g., `node_modules`)
+
+## See Also
+
+- [Formatter Configuration](/guide/configuration)
+- [Editor Integration](/guide/editor-integration)
+- [Prettier Compatibility](/guide/prettier-migration)

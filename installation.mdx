@@ -1,0 +1,405 @@
+---
+title: Installation
+description: Install oxlint, oxfmt, Node.js packages, and Rust crates for the Oxc toolchain
+---
+
+Oxc provides multiple tools and packages for JavaScript/TypeScript development. Choose the installation method that fits your needs.
+
+## CLI Tools
+
+### oxlint (Linter)
+
+Install oxlint as a dev dependency in your project:
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev oxlint
+```
+
+```bash yarn
+yarn add --dev oxlint
+```
+
+```bash pnpm
+pnpm add --save-dev oxlint
+```
+
+</CodeGroup>
+
+Or run it directly without installation:
+
+```bash
+npx oxlint@latest
+```
+
+<Note>
+  **Current version:** 1.51.0
+  
+  **Node.js requirement:** ^20.19.0 || >=22.12.0
+</Note>
+
+### oxfmt (Formatter)
+
+Install oxfmt as a dev dependency in your project:
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev oxfmt
+```
+
+```bash yarn
+yarn add --dev oxfmt
+```
+
+```bash pnpm
+pnpm add --save-dev oxfmt
+```
+
+</CodeGroup>
+
+Or run it directly without installation:
+
+```bash
+npx oxfmt@latest
+```
+
+<Note>
+  **Current version:** 0.36.0
+  
+  **Node.js requirement:** ^20.19.0 || >=22.12.0
+</Note>
+
+## Node.js Packages
+
+### oxc-parser
+
+The fastest JavaScript/TypeScript parser written in Rust, available as a Node.js package.
+
+<CodeGroup>
+
+```bash npm
+npm install oxc-parser
+```
+
+```bash yarn
+yarn add oxc-parser
+```
+
+```bash pnpm
+pnpm add oxc-parser
+```
+
+</CodeGroup>
+
+**Basic usage:**
+
+```typescript
+import { parseSync } from "oxc-parser";
+
+const result = parseSync("test.js", "const x = 1;");
+console.log(result.program.body.length); // 1
+console.log(result.errors); // []
+```
+
+**With options:**
+
+```typescript
+import { parse } from "oxc-parser";
+
+// Async parsing
+const result = await parse("test.ts", code, {
+  lang: "ts",
+  sourceType: "module",
+  showSemanticErrors: true,
+});
+```
+
+<Note>
+  **Current version:** 0.116.0
+  
+  Supports JS, TS, JSX, TSX, and DTS files
+</Note>
+
+### oxc-transform
+
+TypeScript, React, and modern JavaScript transformation (Babel alternative).
+
+<CodeGroup>
+
+```bash npm
+npm install oxc-transform
+```
+
+```bash yarn
+yarn add oxc-transform
+```
+
+```bash pnpm
+pnpm add oxc-transform
+```
+
+</CodeGroup>
+
+**Basic usage:**
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+const result = transformSync("source.tsx", code, {
+  typescript: true,
+});
+
+console.log(result.code);
+```
+
+**With TypeScript declarations:**
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+const result = transformSync("test.ts", "export class A<T> {}", {
+  typescript: { declaration: {} },
+  sourcemap: true,
+});
+
+console.log(result.declaration); // "export declare class A<T> {}\n"
+console.log(result.declarationMap); // Source map for declarations
+```
+
+**Target ES2015:**
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+const result = transformSync("test.js", "const add = (a, b) => a + b;", {
+  target: "es2015",
+});
+
+console.log(result.code);
+```
+
+<Note>
+  **Current version:** 0.116.0
+  
+  Supports TypeScript, JSX/TSX, and ES6+ transformations
+</Note>
+
+### oxc-minify
+
+High-performance JavaScript minifier.
+
+<CodeGroup>
+
+```bash npm
+npm install oxc-minify
+```
+
+```bash yarn
+yarn add oxc-minify
+```
+
+```bash pnpm
+pnpm add oxc-minify
+```
+
+</CodeGroup>
+
+**Basic usage:**
+
+```typescript
+import { minifySync } from "oxc-minify";
+
+const result = minifySync("test.js", code, {
+  mangle: true,
+  sourcemap: true,
+});
+
+console.log(result.code);
+console.log(result.map);
+```
+
+**Disable compression and mangling:**
+
+```typescript
+import { minifySync } from "oxc-minify";
+
+const result = minifySync("test.js", code, {
+  compress: false,
+  mangle: false,
+  codegen: { removeWhitespace: false },
+});
+```
+
+**Tree-shaking with pure annotations:**
+
+```typescript
+import { minifySync } from "oxc-minify";
+
+const code = "/* @__PURE__ */ foo(); bar();";
+const result = minifySync("test.js", code, {
+  compress: {},
+});
+
+console.log(result.code); // "bar();"
+```
+
+<Note>
+  **Current version:** 0.116.0
+  
+  Supports compression, mangling, and tree-shaking
+</Note>
+
+## Rust Crates
+
+Oxc provides individual crates for building custom JavaScript tools in Rust.
+
+### Main Crate
+
+The `oxc` crate is the main entry point that includes all components:
+
+```toml Cargo.toml
+[dependencies]
+oxc = "0.116.0"
+```
+
+### Individual Crates
+
+You can also use individual crates for specific functionality:
+
+```toml Cargo.toml
+[dependencies]
+# Parser - JS/TS parser with AST
+oxc_parser = { version = "0.116.0", features = ["regular_expression"] }
+
+# AST definitions and utilities
+oxc_ast = "0.116.0"
+
+# Semantic analysis (symbols, scopes)
+oxc_semantic = "0.116.0"
+
+# Code generation
+oxc_codegen = "0.116.0"
+
+# Transformer (Babel-like transformations)
+oxc_transformer = "0.116.0"
+
+# Minifier
+oxc_minifier = "0.116.0"
+
+# Memory management
+oxc_allocator = "0.116.0"
+
+# AST traversal utilities
+oxc_traverse = "0.116.0"
+
+# Error reporting
+oxc_diagnostics = "0.116.0"
+
+# Module resolution
+oxc_resolver = "11.16.3"
+
+# Source map generation
+oxc_sourcemap = "6.0.1"
+```
+
+<Note>
+  **Rust version:** MSRV 1.91.0 (Minimum Supported Rust Version)
+  
+  All crates are published at version 0.116.0
+</Note>
+
+### Key Crates Overview
+
+<CardGroup cols={2}>
+  <Card title="oxc_parser" icon="code">
+    Fast JavaScript/TypeScript parser producing an AST
+  </Card>
+  <Card title="oxc_semantic" icon="sitemap">
+    Semantic analysis with symbol tables and scope information
+  </Card>
+  <Card title="oxc_transformer" icon="arrows-rotate">
+    Code transformation (TypeScript, JSX, ES6+)
+  </Card>
+  <Card title="oxc_minifier" icon="compress">
+    Code minification with compression and mangling
+  </Card>
+  <Card title="oxc_codegen" icon="file-code">
+    Generate code from AST with source maps
+  </Card>
+  <Card title="oxc_traverse" icon="route">
+    AST traversal utilities with visitor pattern
+  </Card>
+</CardGroup>
+
+## Platform Support
+
+All Oxc tools support multiple platforms and architectures:
+
+- **macOS:** x86_64, ARM64 (Apple Silicon)
+- **Linux:** x86_64, ARM64, ARMv7, RISC-V, s390x (GNU and musl)
+- **Windows:** x86_64, ARM64, x86
+- **FreeBSD:** x86_64
+- **Android:** ARM64, ARMv7
+- **WASM:** wasm32-wasip1-threads (browser and Node.js)
+
+<Note>
+  Pre-built binaries are automatically downloaded during installation for supported platforms.
+</Note>
+
+## Verification
+
+Verify your installation:
+
+<Tabs>
+  <Tab title="oxlint">
+    ```bash
+    npx oxlint --version
+    ```
+  </Tab>
+  
+  <Tab title="oxfmt">
+    ```bash
+    npx oxfmt --version
+    ```
+  </Tab>
+  
+  <Tab title="Node.js Packages">
+    ```javascript
+    // Create test.js
+    import { parseSync } from "oxc-parser";
+    console.log(parseSync("test.js", "const x = 1;").program);
+    ```
+    
+    ```bash
+    node test.js
+    ```
+  </Tab>
+  
+  <Tab title="Rust">
+    ```bash
+    cargo --version
+    rustc --version
+    ```
+    
+    Ensure Rust 1.91.0 or later is installed.
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with oxlint in minutes
+  </Card>
+  <Card title="Linter Guide" icon="shield-check" href="/tools/linter">
+    Configure and customize oxlint
+  </Card>
+  <Card title="Formatter Guide" icon="wand-magic-sparkles" href="/tools/formatter">
+    Format your code with oxfmt
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/parser">
+    Explore the full API documentation
+  </Card>
+</CardGroup>

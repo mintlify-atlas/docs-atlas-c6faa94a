@@ -1,0 +1,601 @@
+---
+title: "Module Resolver"
+description: "Node.js-style module resolution for JavaScript build tools"
+icon: "magnifying-glass"
+---
+
+## Overview
+
+The Oxc Resolver is a high-performance module resolution library that implements Node.js-style module resolution. It's used by build tools, bundlers, and linters to resolve import and require statements to actual file paths.
+
+<CardGroup cols={2}>
+  <Card title="Node.js Compatible" icon="node">
+    Full implementation of Node.js module resolution algorithm.
+  </Card>
+  <Card title="Enhanced Features" icon="star">
+    TypeScript paths, exports/imports fields, and custom conditions.
+  </Card>
+  <Card title="High Performance" icon="bolt">
+    Optimized with caching and efficient algorithms.
+  </Card>
+  <Card title="Well-Tested" icon="check">
+    Passes enhanced-resolve test suite.
+  </Card>
+</CardGroup>
+
+<Note>
+The resolver is available as a standalone package `oxc-resolver` and is also used internally by oxlint's import plugin.
+</Note>
+
+## Features
+
+### Resolution Algorithms
+
+- **Node.js Resolution**: Classic `node_modules` traversal
+- **Package Exports**: Support for `exports` field in package.json
+- **Package Imports**: Support for `imports` field (subpath imports)
+- **TypeScript Paths**: Resolve using `tsconfig.json` path mappings
+- **Conditional Exports**: Resolve based on conditions (import, require, node, browser, etc.)
+
+### File Type Support
+
+- JavaScript: `.js`, `.mjs`, `.cjs`
+- TypeScript: `.ts`, `.tsx`, `.mts`, `.cts`
+- JSON: `.json`
+- CSS: `.css`, `.scss`, `.sass`, `.less`
+- Other: Custom extensions
+
+### Advanced Features
+
+- **Browser Field**: Support for browser-specific entry points
+- **Aliases**: Configure custom path aliases
+- **Extension Resolution**: Automatic extension resolution
+- **Directory Indexes**: Resolve directories to index files
+- **Symlink Resolution**: Handle symbolic links correctly
+- **Yarn PnP**: Support for Yarn Plug'n'Play
+
+## Node.js API
+
+### Installation
+
+```bash npm
+npm install oxc-resolver
+```
+
+### Basic Usage
+
+```typescript
+import { ResolverFactory } from 'oxc-resolver';
+
+// Create resolver
+const resolver = new ResolverFactory();
+
+// Resolve a module
+const result = resolver.sync('lodash', '/path/to/project');
+
+if (result.error) {
+  console.error('Resolution failed:', result.error);
+} else {
+  console.log('Resolved to:', result.path);
+  // Resolved to: /path/to/project/node_modules/lodash/lodash.js
+}
+```
+
+### Resolver Options
+
+```typescript
+interface ResolverOptions {
+  /** Condition names for conditional exports */
+  conditionNames?: string[];
+  
+  /** Alias mappings */
+  alias?: Record<string, string | string[]>;
+  
+  /** Extensions to try */
+  extensions?: string[];
+  
+  /** Main fields to check in package.json */
+  mainFields?: string[];
+  
+  /** Main files to check (index.js, etc) */
+  mainFiles?: string[];
+  
+  /** Module directories to search (node_modules, etc) */
+  modules?: string[];
+  
+  /** Enable TypeScript path resolution */
+  tsconfig?: TsConfigOptions;
+  
+  /** Enable symlinks */
+  symlinks?: boolean;
+  
+  /** Prefer relative imports */
+  preferRelative?: boolean;
+  
+  /** Enable browser field */
+  browser?: boolean;
+}
+```
+
+### Creating Configured Resolver
+
+```typescript
+import { ResolverFactory } from 'oxc-resolver';
+
+const resolver = new ResolverFactory({
+  // Extensions to try
+  extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+  
+  // Condition names for exports field
+  conditionNames: ['import', 'require', 'node', 'default'],
+  
+  // Main fields in package.json
+  mainFields: ['module', 'main'],
+  
+  // Aliases
+  alias: {
+    '@': './src',
+    '@components': './src/components',
+    '@utils': './src/utils'
+  },
+  
+  // Enable TypeScript resolution
+  tsconfig: {
+    configFile: './tsconfig.json',
+    references: 'auto'  // Follow project references
+  }
+});
+
+const result = resolver.sync('@components/Button', '/path/to/project');
+```
+
+### Async Resolution
+
+```typescript
+const result = await resolver.async('react', '/path/to/project');
+
+if (result.path) {
+  console.log('Resolved to:', result.path);
+}
+```
+
+### TypeScript Path Resolution
+
+```typescript
+// tsconfig.json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@utils/*": ["src/utils/*"]
+    }
+  }
+}
+
+// Code
+const resolver = new ResolverFactory({
+  tsconfig: {
+    configFile: './tsconfig.json'
+  }
+});
+
+const result = resolver.sync('@/lib/helper', '/path/to/project');
+// Resolves to: /path/to/project/src/lib/helper.ts
+```
+
+## Rust API
+
+### Adding to Cargo.toml
+
+```toml Cargo.toml
+[dependencies]
+oxc_resolver = "11"
+```
+
+### Basic Usage
+
+```rust
+use oxc_resolver::{Resolver, ResolveOptions};
+use std::path::Path;
+
+fn main() {
+    // Create resolver with default options
+    let resolver = Resolver::default();
+    
+    // Resolve a module
+    let path = Path::new("/path/to/project");
+    let result = resolver.resolve(path, "lodash");
+    
+    match result {
+        Ok(resolved) => {
+            println!("Resolved to: {:?}", resolved.path());
+        }
+        Err(error) => {
+            eprintln!("Resolution failed: {:?}", error);
+        }
+    }
+}
+```
+
+### Resolver Options
+
+```rust
+use oxc_resolver::{Resolver, ResolveOptions};
+
+let options = ResolveOptions {
+    extensions: vec![
+        ".ts".into(),
+        ".tsx".into(),
+        ".js".into(),
+        ".jsx".into(),
+    ],
+    
+    condition_names: vec![
+        "import".into(),
+        "require".into(),
+        "node".into(),
+        "default".into(),
+    ],
+    
+    main_fields: vec!["module".into(), "main".into()],
+    
+    alias: vec![
+        ("@".into(), vec!["./src".into()]),
+        ("@components".into(), vec!["./src/components".into()]),
+    ],
+    
+    tsconfig: Some(TsconfigOptions {
+        config_file: "./tsconfig.json".into(),
+        references: TsconfigReferences::Auto,
+    }),
+    
+    ..ResolveOptions::default()
+};
+
+let resolver = Resolver::new(options);
+```
+
+### Caching
+
+```rust
+use oxc_resolver::{Resolver, ResolveOptions, ResolverCache};
+
+// Create resolver with cache
+let cache = ResolverCache::default();
+let resolver = Resolver::new_with_cache(ResolveOptions::default(), cache);
+
+// Subsequent resolutions will use cache
+let result1 = resolver.resolve(path, "lodash");
+let result2 = resolver.resolve(path, "lodash");  // Uses cached result
+```
+
+## Resolution Examples
+
+### Node Modules Resolution
+
+```typescript
+// Resolve from node_modules
+resolver.sync('react', '/app/src')
+// → /app/node_modules/react/index.js
+
+resolver.sync('lodash/isEmpty', '/app/src')
+// → /app/node_modules/lodash/isEmpty.js
+```
+
+### Relative Imports
+
+```typescript
+// Relative paths
+resolver.sync('./utils/helper', '/app/src/components')
+// → /app/src/components/utils/helper.js
+
+resolver.sync('../lib/api', '/app/src/components')
+// → /app/src/lib/api.js
+```
+
+### Package Exports
+
+```json package.json
+{
+  "name": "my-package",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/esm/utils.js",
+      "require": "./dist/cjs/utils.js"
+    }
+  }
+}
+```
+
+```typescript
+// With conditionNames: ['import']
+resolver.sync('my-package', '/app')
+// → /app/node_modules/my-package/dist/esm/index.js
+
+resolver.sync('my-package/utils', '/app')
+// → /app/node_modules/my-package/dist/esm/utils.js
+```
+
+### TypeScript Paths
+
+```typescript
+// tsconfig.json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"]
+    }
+  }
+}
+
+// Resolution
+resolver.sync('@/utils/helper', '/app')
+// → /app/src/utils/helper.ts
+
+resolver.sync('@components/Button', '/app')
+// → /app/src/components/Button.tsx
+```
+
+### Alias Resolution
+
+```typescript
+const resolver = new ResolverFactory({
+  alias: {
+    '@': './src',
+    '@lib': './src/lib',
+    'vendor': './vendor/packages'
+  }
+});
+
+resolver.sync('@/index', '/app')
+// → /app/src/index.js
+
+resolver.sync('@lib/utils', '/app')
+// → /app/src/lib/utils.js
+```
+
+### Browser Field
+
+```json package.json
+{
+  "name": "my-package",
+  "main": "./index.js",
+  "browser": {
+    "./index.js": "./browser.js",
+    "fs": false
+  }
+}
+```
+
+```typescript
+const resolver = new ResolverFactory({
+  browser: true
+});
+
+resolver.sync('my-package', '/app')
+// → /app/node_modules/my-package/browser.js
+
+resolver.sync('fs', '/app')
+// → false (ignored in browser)
+```
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Bundlers">
+    ```typescript
+    // webpack/rollup/vite plugin
+    function resolvePlugin() {
+      const resolver = new ResolverFactory({
+        extensions: ['.ts', '.tsx', '.js', '.jsx'],
+        tsconfig: { configFile: './tsconfig.json' }
+      });
+      
+      return {
+        name: 'resolve',
+        resolveId(source, importer) {
+          const result = resolver.sync(source, importer);
+          return result.path;
+        }
+      };
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Linters">
+    ```typescript
+    // Check if imports resolve correctly
+    import { ResolverFactory } from 'oxc-resolver';
+    
+    function validateImport(importPath, currentFile) {
+      const resolver = new ResolverFactory();
+      const result = resolver.sync(importPath, currentFile);
+      
+      if (result.error) {
+        console.error(`Cannot resolve: ${importPath}`);
+        return false;
+      }
+      
+      return true;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Dependency Analysis">
+    ```typescript
+    // Build dependency graph
+    function analyzeDependencies(entryFile) {
+      const resolver = new ResolverFactory();
+      const deps = new Set();
+      
+      function traverse(file) {
+        const imports = extractImports(file);
+        
+        for (const imp of imports) {
+          const result = resolver.sync(imp, file);
+          if (result.path && !deps.has(result.path)) {
+            deps.add(result.path);
+            traverse(result.path);
+          }
+        }
+      }
+      
+      traverse(entryFile);
+      return deps;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Module Analysis">
+    ```typescript
+    // Find all files importing a module
+    function findImporters(targetModule, sourceFiles) {
+      const resolver = new ResolverFactory();
+      const importers = [];
+      
+      for (const file of sourceFiles) {
+        const imports = extractImports(file);
+        
+        for (const imp of imports) {
+          const result = resolver.sync(imp, file);
+          if (result.path === targetModule) {
+            importers.push(file);
+            break;
+          }
+        }
+      }
+      
+      return importers;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Integration
+
+### With oxlint
+
+The resolver is used internally by oxlint's import plugin:
+
+```json .oxlintrc.json
+{
+  "plugins": ["import"],
+  "rules": {
+    "import/no-unresolved": "error"
+  }
+}
+```
+
+### With Custom Tools
+
+```typescript
+import { ResolverFactory } from 'oxc-resolver';
+
+class MyBundler {
+  private resolver: ResolverFactory;
+  
+  constructor(config) {
+    this.resolver = new ResolverFactory({
+      extensions: config.extensions,
+      alias: config.alias,
+      tsconfig: config.tsconfig
+    });
+  }
+  
+  resolve(specifier: string, from: string) {
+    return this.resolver.sync(specifier, from);
+  }
+}
+```
+
+## Performance
+
+### Caching
+
+The resolver implements aggressive caching:
+
+- **Resolution Cache**: Cache resolved paths
+- **File System Cache**: Cache file existence checks
+- **Package.json Cache**: Cache package.json parsing
+- **TSConfig Cache**: Cache tsconfig.json parsing
+
+### Benchmarks
+
+Comparison with enhanced-resolve:
+
+| Operation | oxc-resolver | enhanced-resolve |
+|-----------|--------------|------------------|
+| Cold resolve | ~1ms | ~5ms |
+| Cached resolve | ~0.01ms | ~0.1ms |
+| 10,000 resolves | ~100ms | ~800ms |
+
+## Comparison
+
+### vs enhanced-resolve (webpack)
+
+| Feature | oxc-resolver | enhanced-resolve |
+|---------|--------------|------------------|
+| **Speed** | Fast | Slower |
+| **Node.js Resolution** | Yes | Yes |
+| **Exports Field** | Yes | Yes |
+| **TypeScript Paths** | Native | Via plugin |
+| **Caching** | Built-in | Manual |
+
+### vs Node.js require.resolve
+
+| Feature | oxc-resolver | require.resolve |
+|---------|--------------|----------------|
+| **Exports Field** | Yes | Yes (Node 12.7+) |
+| **TypeScript Paths** | Yes | No |
+| **Conditions** | Configurable | Limited |
+| **Aliases** | Yes | No |
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/oxc-project/oxc">
+    Source code (part of oxc monorepo)
+  </Card>
+  <Card title="npm Package" icon="npm" href="https://www.npmjs.com/package/oxc-resolver">
+    Standalone npm package
+  </Card>
+  <Card title="crates.io" icon="rust" href="https://crates.io/crates/oxc_resolver">
+    Rust crate
+  </Card>
+  <Card title="Documentation" icon="book" href="https://docs.rs/oxc_resolver">
+    Rust API documentation
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Does it work with Yarn PnP?">
+    Yes, the resolver has experimental support for Yarn Plug'n'Play resolution.
+  </Accordion>
+  
+  <Accordion title="Can I use it with webpack?">
+    Yes, though webpack has enhanced-resolve built-in. You might use oxc-resolver for custom plugins or tools.
+  </Accordion>
+  
+  <Accordion title="Does it support subpath exports?">
+    Yes, full support for package.json exports field including subpath exports and conditional exports.
+  </Accordion>
+  
+  <Accordion title="How do I debug resolution failures?">
+    Enable debug logging or check the error message in the result. Common issues: missing files, incorrect aliases, or misconfigured tsconfig paths.
+  </Accordion>
+  
+  <Accordion title="Is it compatible with Node.js resolution?">
+    Yes, it implements the full Node.js resolution algorithm including all edge cases.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,460 @@
+---
+title: Testing
+description: Understanding Oxc's comprehensive testing infrastructure
+---
+
+Oxc uses multiple testing approaches to ensure correctness and reliability. Each crate has its own testing strategy tailored to its functionality.
+
+## Testing Philosophy
+
+<Note>
+  Correctness and reliability are taken extremely seriously in Oxc. We spend significant effort on strengthening the test infrastructure to prevent problems from propagating to downstream tools.
+</Note>
+
+Oxc employs three main testing strategies:
+
+1. **Unit/Integration tests** - Standard Rust tests in `tests/` directories
+2. **Conformance tests** - Testing against external suites (Test262, Babel, TypeScript, Prettier)
+3. **Snapshot tests** - Tracking expected outputs using `insta`
+
+## Quick Test Commands
+
+### Essential Commands
+
+```bash
+just test                          # Run all Rust unit/integration tests
+just conformance                   # Run all conformance tests
+cargo test -p <crate_name>        # Test specific crate
+```
+
+### Conformance Tests by Tool
+
+```bash
+# Parser conformance
+cargo coverage -- parser
+
+# Transformer conformance
+cargo coverage -- transformer
+cargo run -p oxc_transform_conformance -- --exec
+
+# Formatter conformance
+cargo run -p oxc_prettier_conformance
+
+# ESTree format
+cargo run -p oxc_coverage --profile coverage -- estree
+```
+
+### NAPI Tests
+
+```bash
+pnpm build-dev    # Build all NAPI packages
+pnpm test         # Run all NAPI tests
+
+# Package-specific
+cd napi/parser && pnpm test
+cd napi/transform && pnpm test
+cd napi/minify && pnpm test
+```
+
+## Conformance Test Suites
+
+<Warning>
+  These external test suites are the **CORE** of Oxc's testing strategy. They provide thousands of real-world test cases from mature JavaScript ecosystem projects.
+</Warning>
+
+Oxc uses Git submodules for conformance testing:
+
+### Test262 - ECMAScript Specification
+
+**Location**: `tasks/coverage/test262/`
+
+- Official JavaScript test suite from TC39
+- Tests compliance with ECMAScript specification
+- Used by: parser, semantic, codegen, transformer, minifier, estree
+
+### Babel - JavaScript Transformation
+
+**Location**: `tasks/coverage/babel/`
+
+- Comprehensive transformation and parsing tests
+- Covers modern JavaScript features and edge cases
+- Used by: parser, semantic, codegen, transformer, minifier
+
+### TypeScript - TypeScript Syntax
+
+**Location**: `tasks/coverage/typescript/`
+
+- Microsoft's TypeScript compiler tests
+- Ensures correct handling of TypeScript syntax and semantics
+- Used by: parser, semantic, codegen, transformer, estree
+
+### Prettier - Code Formatting
+
+**Location**: `tasks/prettier_conformance/prettier/`
+
+- Prettier's comprehensive formatting test suite
+- Ensures code formatting matches industry standards
+- Used by: formatter
+
+### Managing Submodules
+
+```bash
+# Clone/update all submodules
+just submodules
+
+# Update transformer fixtures
+just update-transformer-fixtures
+```
+
+## Crate-Specific Testing
+
+### oxc_parser
+
+**Strategy**: Conformance testing only (no unit tests)
+
+```bash
+# Run parser conformance
+cargo coverage -- parser
+
+# Update allocation snapshots
+just allocs
+```
+
+**Test suites**: Test262, Babel, TypeScript
+
+**Adding tests**: Place test files in:
+- `tasks/coverage/misc/pass/` - Should parse successfully
+- `tasks/coverage/misc/fail/` - Should fail to parse
+
+### oxc_linter
+
+**Strategy**: Inline tests in rule files
+
+**Test pattern**:
+
+```rust
+use crate::tester::Tester;
+
+#[test]
+fn test() {
+    let pass = vec![
+        "valid code example 1",
+        "valid code example 2",
+    ];
+    
+    let fail = vec![
+        "invalid code example 1",
+        "invalid code example 2",
+    ];
+    
+    Tester::new(RuleName::NAME, RuleName::PLUGIN, pass, fail)
+        .test_and_snapshot();
+}
+```
+
+**Location**: `crates/oxc_linter/src/rules/<plugin>/<rule>.rs`
+
+**Running tests**:
+
+```bash
+cargo test -p oxc_linter
+
+# Test specific rule
+cargo test -p oxc_linter no_console
+```
+
+### oxc_formatter
+
+**Strategy**: Prettier conformance only (no unit tests)
+
+```bash
+# Run all Prettier conformance tests
+cargo run -p oxc_prettier_conformance
+
+# Filter specific tests
+cargo run -p oxc_prettier_conformance -- --filter arrow
+```
+
+**Output**: Compares formatted output with Prettier's snapshots
+
+### oxc_transformer
+
+**Strategy**: Multiple approaches
+
+```bash
+# Unit tests
+cargo test -p oxc_transformer
+
+# Conformance tests
+cargo run -p oxc_transform_conformance -- --exec
+
+# Filter tests
+just test-transform --filter arrow
+```
+
+**Test locations**:
+- Unit tests: `crates/oxc_transformer/tests/integrations/`
+- Conformance: `tasks/transform_conformance/`
+- Babel plugins: `tasks/transform_conformance/tests/babel-plugin-*/`
+
+### oxc_minifier
+
+**Strategy**: Unit tests with size tracking
+
+```bash
+# Run tests
+cargo test -p oxc_minifier
+
+# Update size snapshots
+just minsize
+```
+
+**Test directories**:
+- `tests/ecmascript/` - ECMAScript operations
+- `tests/peephole/` - Peephole optimizations
+- `tests/mangler/` - Name mangling
+
+### oxc_codegen
+
+**Strategy**: Integration tests
+
+```bash
+cargo test -p oxc_codegen
+```
+
+**Test files**: `crates/oxc_codegen/tests/integration/`
+- `js.rs` - JavaScript code generation
+- `ts.rs` - TypeScript code generation
+- `sourcemap.rs` - Source map generation
+- `comments.rs` - Comment preservation
+
+### oxc_isolated_declarations
+
+**Strategy**: Snapshot testing with `insta`
+
+```bash
+# Run tests
+cargo test -p oxc_isolated_declarations
+
+# Review/update snapshots
+cargo insta review
+```
+
+**Test structure**:
+- Input: `tests/fixtures/*.{ts,tsx}`
+- Output: `tests/snapshots/*.snap`
+
+### oxc_semantic
+
+**Strategy**: Multiple testing approaches
+
+```bash
+# Run all semantic tests
+cargo test -p oxc_semantic
+
+# Update snapshots
+cargo insta review
+```
+
+**Test types**:
+- **Conformance tests** (`tests/conformance/`) - Contract-as-code for symbols and references
+- **Integration tests** (`tests/integration/`) - Scopes, symbols, modules, classes, CFG
+- **Snapshot tests** (`tests/main.rs`) - Scope trees, bindings, symbols, references
+- **Coverage tests** - Via Test262, Babel, TypeScript suites
+
+### Other Crates
+
+```bash
+cargo test -p oxc_traverse          # AST traversal
+cargo test -p oxc_ecmascript        # ECMAScript operations
+cargo test -p oxc_regular_expression # Regex parsing
+cargo test -p oxc_syntax            # Syntax utilities
+cargo test -p oxc_language_server   # Editor integration
+```
+
+## Snapshot Testing
+
+Oxc uses the `insta` crate for snapshot testing.
+
+### How Snapshots Work
+
+- Snapshots track **failing** tests, not passing ones
+- Located in `tasks/coverage/snapshots/` and crate-specific directories
+- Formats:
+  - `.snap` - Failure counts
+  - `.snap.md` - Detailed failure information
+
+### Managing Snapshots
+
+```bash
+# Review and accept/reject snapshot changes
+cargo insta review
+
+# Accept all snapshot changes
+cargo insta accept
+
+# Run tests and review in one command
+cargo insta test --review
+```
+
+### Snapshot Best Practices
+
+1. **Review carefully** - Snapshots should reflect expected behavior
+2. **Commit snapshots** - Always commit snapshot files with your changes
+3. **Update when needed** - Update snapshots when behavior intentionally changes
+4. **Check diffs** - Review snapshot diffs to understand test changes
+
+## NAPI Testing
+
+NAPI packages use **Vitest** for testing Node.js bindings.
+
+### Setup
+
+```bash
+# Build NAPI packages
+pnpm build-dev
+
+# Run all NAPI tests
+pnpm test
+```
+
+### Package-Specific Tests
+
+```bash
+# oxc-parser
+cd napi/parser
+pnpm test
+pnpm test-browser    # Browser-specific tests
+
+# oxc-transform
+cd napi/transform
+pnpm test
+
+# oxc-minify
+cd napi/minify
+pnpm test
+```
+
+**Test location**: Each package's `test/` directory (TypeScript files)
+
+## Adding New Tests
+
+### Where to Add Tests
+
+| Component | Location |
+|-----------|----------|
+| Parser | `tasks/coverage/misc/pass/` or `fail/` |
+| Linter | Inline in rule files |
+| Formatter | Prettier conformance suite |
+| Minifier | `crates/oxc_minifier/tests/` |
+| Transformer | `crates/oxc_transformer/tests/integrations/` |
+| Codegen | `crates/oxc_codegen/tests/integration/` |
+| Isolated Declarations | `crates/oxc_isolated_declarations/tests/fixtures/` |
+| Semantic | `crates/oxc_semantic/tests/` |
+| NAPI | `napi/<package>/test/` |
+
+### Test Writing Guidelines
+
+<Steps>
+  <Step title="Identify the appropriate test location">
+    See the table above for where to place your test.
+  </Step>
+
+  <Step title="Write test cases">
+    Follow the existing pattern in that directory or file.
+  </Step>
+
+  <Step title="Run tests locally">
+    ```bash
+    cargo test -p <crate_name>
+    ```
+  </Step>
+
+  <Step title="Update snapshots if needed">
+    ```bash
+    cargo insta review
+    ```
+  </Step>
+
+  <Step title="Verify all tests pass">
+    ```bash
+    just test
+    ```
+  </Step>
+</Steps>
+
+## Debugging Tests
+
+### Running Specific Tests
+
+```bash
+# Run tests matching a pattern
+cargo test -p oxc_linter no_console
+
+# Run a specific test function
+cargo test -p oxc_parser test_arrow_function
+
+# Show test output
+cargo test -p oxc_linter -- --nocapture
+```
+
+### Using Examples for Debugging
+
+```bash
+# Run parser example on a file
+cargo run -p oxc_parser --example parser -- test.js
+
+# Run linter example
+cargo run -p oxc_linter --example linter -- src/
+
+# Run with watch mode
+just watch 'cargo run -p oxc_linter --example linter -- test.js'
+```
+
+### Searching Test Suites
+
+Conformance test suites are pre-cloned and searchable:
+
+```bash
+# Search Test262
+grep -r "async function" tasks/coverage/test262/
+
+# Search Babel tests
+grep -r "arrow function" tasks/coverage/babel/
+
+# Search TypeScript tests
+grep -r "namespace" tasks/coverage/typescript/
+```
+
+## Code Coverage
+
+Generate code coverage reports:
+
+```bash
+just codecov
+```
+
+This generates an HTML report in `target/llvm-cov/html/`.
+
+## Continuous Integration
+
+Oxc runs extensive tests in CI:
+
+- All unit and integration tests
+- All conformance tests
+- Snapshot validation
+- Linting and formatting checks
+- NAPI tests on multiple platforms
+- Documentation builds
+
+Before submitting a PR, ensure all checks pass:
+
+```bash
+just ready
+```
+
+## Next Steps
+
+- Learn how to [Add Linter Rules](/contribute/adding-rules)
+- Review the [Architecture](/contribute/architecture)
+- Check the [FAQ](/contribute/faq) for testing tips

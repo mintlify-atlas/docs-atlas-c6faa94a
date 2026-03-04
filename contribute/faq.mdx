@@ -1,0 +1,523 @@
+---
+title: FAQ
+description: Frequently asked questions for Oxc contributors
+---
+
+Common questions and troubleshooting tips for contributing to Oxc.
+
+## Getting Started
+
+### What should I work on?
+
+Start with:
+
+1. Browse [good first issues](https://github.com/oxc-project/oxc/contribute)
+2. Look for issues labeled `help wanted`
+3. Ask for guidance on [Discord](https://discord.gg/9uXCAwqQZW)
+4. Review existing PRs to understand the codebase
+
+### Do I need to know Rust?
+
+Yes, most of Oxc is written in Rust. However, you can also contribute to:
+
+- Documentation improvements
+- Test cases
+- NAPI bindings (TypeScript/JavaScript)
+- Issue triage and discussion
+
+If you're learning Rust, start with smaller issues to get familiar with the codebase.
+
+### How do I set up my development environment?
+
+Follow the [Getting Started](/contribute/getting-started) guide:
+
+```bash
+just init
+just submodules
+just test
+```
+
+## Development Workflow
+
+### What does `just ready` do?
+
+The `just ready` command runs all checks that CI will run:
+
+```bash
+just ready
+```
+
+This includes:
+- Checking for uncommitted changes
+- Installing dependencies
+- Running spell checker (`typos`)
+- Regenerating linter rules (`cargo lintgen`)
+- Formatting code (`just fmt`)
+- Running cargo check
+- Running all tests
+- Running linter
+- Building documentation
+- Updating AST generated files
+
+**Always run `just ready` before submitting a PR.**
+
+### When should I run `cargo lintgen`?
+
+Run `cargo lintgen` after:
+
+- Adding a new linter rule
+- Modifying rule metadata (name, category, etc.)
+- Changing rule registration
+
+This regenerates the rules enum and implementation.
+
+### When should I run `just ast`?
+
+Run `just ast` after modifying:
+
+- AST definitions in `oxc_ast`
+- AST-related macros
+- Visitor generation code
+
+This updates all generated files.
+
+### How do I update snapshots?
+
+Use `cargo insta` for snapshot testing:
+
+```bash
+# Review all snapshot changes
+cargo insta review
+
+# Accept all changes
+cargo insta accept
+
+# Test and review in one command
+cargo insta test --review
+```
+
+## Testing
+
+### How do I run tests for a specific crate?
+
+```bash
+cargo test -p <crate_name>
+
+# Examples
+cargo test -p oxc_linter
+cargo test -p oxc_parser
+cargo test -p oxc_transformer
+```
+
+### How do I run a specific test?
+
+```bash
+cargo test -p <crate_name> <test_name>
+
+# Example
+cargo test -p oxc_linter no_console
+```
+
+### How do I see test output?
+
+Add `-- --nocapture` to see `println!` and `eprintln!` output:
+
+```bash
+cargo test -p oxc_linter my_test -- --nocapture
+```
+
+### Where are conformance tests?
+
+Conformance tests use external test suites:
+
+- **Test262**: `tasks/coverage/test262/`
+- **Babel**: `tasks/coverage/babel/`
+- **TypeScript**: `tasks/coverage/typescript/`
+- **Prettier**: `tasks/prettier_conformance/prettier/`
+
+Update them with:
+
+```bash
+just submodules
+```
+
+### How do I add a parser test?
+
+Add test files to:
+
+- `tasks/coverage/misc/pass/` - Should parse successfully
+- `tasks/coverage/misc/fail/` - Should fail to parse
+
+Then run:
+
+```bash
+just conformance parser
+```
+
+## Linter Rules
+
+### How do I create a new linter rule?
+
+Use the rule generator:
+
+```bash
+just new-rule <rule-name> <plugin>
+
+# Examples
+just new-rule no-console eslint
+just new-ts-rule no-explicit-any
+just new-react-rule no-unsafe-render
+```
+
+See [Adding Rules](/contribute/adding-rules) for details.
+
+### Where do I add linter rule tests?
+
+Tests are co-located with the rule in `crates/oxc_linter/src/rules/<plugin>/<rule>.rs`.
+
+Add test cases in the `#[test]` function:
+
+```rust
+#[test]
+fn test() {
+    let pass = vec![/* passing cases */];
+    let fail = vec![/* failing cases */];
+    
+    Tester::new(MyRule::NAME, MyRule::PLUGIN, pass, fail)
+        .test_and_snapshot();
+}
+```
+
+### How do I update rule tests from ESLint?
+
+```bash
+just update-rule-tests <rule-name> <plugin>
+```
+
+This pulls test cases from the upstream ESLint repository.
+
+### What are rule categories?
+
+- **`correctness`** - Code that is definitely wrong
+- **`suspicious`** - Code that is likely wrong  
+- **`pedantic`** - Opinionated style choices
+- **`restriction`** - Banned patterns (opt-in)
+- **`style`** - Code style improvements
+- **`perf`** - Performance improvements
+
+Choose the category that best fits your rule.
+
+## Common Issues
+
+### `just ast` fails on first run
+
+Try running with JS generators disabled first:
+
+```bash
+cargo run -p oxc_ast_tools --no-default-features
+cargo run -p oxc_ast_tools
+```
+
+Or on Unix:
+
+```bash
+just ast
+```
+
+This will automatically retry with the workaround.
+
+### Build fails with "submodule not found"
+
+Update submodules:
+
+```bash
+just submodules
+```
+
+### Tests pass locally but fail in CI
+
+Ensure you've run all checks:
+
+```bash
+just ready
+```
+
+Also check:
+
+- Snapshots are committed
+- All tests pass including conformance tests
+- Code is formatted with `just fmt`
+- No clippy warnings
+
+### `cargo insta review` shows unexpected changes
+
+This usually means:
+
+1. You changed test behavior (expected)
+2. You introduced a regression (review carefully)
+3. Snapshots are out of date (run tests first)
+
+Review each change carefully before accepting.
+
+### NAPI tests fail
+
+Ensure NAPI packages are built:
+
+```bash
+pnpm build-dev
+pnpm test
+```
+
+### Memory or performance issues
+
+Oxc is designed for performance. If you encounter issues:
+
+- Use the arena allocator for AST allocations
+- Avoid unnecessary cloning
+- Use `CompactString` for short strings
+- Profile with `cargo flamegraph`
+- Ask for help on Discord
+
+## Code Style
+
+### How should I format my code?
+
+Run `just fmt` which runs:
+
+```bash
+cargo fmt
+node --run fmt  # For JavaScript/TypeScript
+```
+
+Configuration is in `.rustfmt.toml` and `.prettierrc`.
+
+### How do I fix clippy warnings?
+
+```bash
+# Auto-fix what's possible
+cargo clippy --fix --allow-staged --no-deps
+
+# Or use just
+just fix
+```
+
+### What naming conventions should I follow?
+
+- **Rust**: Follow [Rust naming conventions](https://rust-lang.github.io/api-guidelines/naming.html)
+  - Types: `PascalCase`
+  - Functions/variables: `snake_case`
+  - Constants: `SCREAMING_SNAKE_CASE`
+- **JavaScript/TypeScript**: Follow standard JavaScript conventions
+  - camelCase for variables and functions
+  - PascalCase for classes and types
+
+## Performance
+
+### How do I benchmark my changes?
+
+```bash
+# Run all benchmarks
+just benchmark
+
+# Benchmark specific component
+just benchmark-one linter
+just benchmark-one parser
+```
+
+### How do I check minifier size impact?
+
+```bash
+just minsize
+```
+
+This updates size snapshots for minified output.
+
+### How do I check parser allocations?
+
+```bash
+just allocs
+```
+
+This tracks memory allocations in the parser.
+
+## Git and Pull Requests
+
+### What should my commit messages look like?
+
+Follow conventional commits:
+
+```
+feat(parser): add support for decorator syntax
+fix(linter): handle edge case in no-console rule
+docs(contributing): update testing guide
+test(transformer): add arrow function test cases
+perf(minifier): optimize constant folding
+```
+
+### When should I squash commits?
+
+Maintainers will typically squash on merge. You don't need to squash during development unless:
+
+- You have many WIP commits
+- Maintainers request it
+- You want a cleaner history
+
+### How do I resolve merge conflicts?
+
+Rebase on main:
+
+```bash
+git fetch origin
+git rebase origin/main
+# Resolve conflicts
+git add .
+git rebase --continue
+just ready
+git push --force-with-lease
+```
+
+## AI Usage
+
+### Should I disclose AI usage?
+
+**Yes.** Our [AI Usage Policy](/contribute/getting-started#ai-usage-policy) requires:
+
+- Disclosing AI tool usage in PRs
+- Taking full responsibility for AI-generated code
+- Thoroughly reviewing and testing AI output
+
+Low-quality AI content will be closed immediately.
+
+### Can I use AI tools?
+
+Yes, but:
+
+- You must disclose their use
+- You are responsible for all generated code
+- Code must meet Oxc's quality and performance standards
+- AI-generated code should be reviewed and understood before submission
+
+## Community
+
+### Where can I get help?
+
+- [Discord server](https://discord.gg/9uXCAwqQZW) - Real-time chat
+- [GitHub Discussions](https://github.com/oxc-project/oxc/discussions) - Long-form discussions
+- [GitHub Issues](https://github.com/oxc-project/oxc/issues) - Bug reports and feature requests
+
+### How can I stay updated?
+
+- Watch the [GitHub repository](https://github.com/oxc-project/oxc)
+- Join the [Discord server](https://discord.gg/9uXCAwqQZW)
+- Follow the [Changelog](https://github.com/oxc-project/oxc/blob/main/CHANGELOG.md)
+- Read the [Maintenance Guide](https://github.com/oxc-project/oxc/blob/main/MAINTENANCE.md)
+
+### How do I report a bug?
+
+1. Search existing [issues](https://github.com/oxc-project/oxc/issues)
+2. Create a new issue with:
+   - Clear description
+   - Minimal reproduction
+   - Expected vs actual behavior
+   - Oxc version
+   - System information
+
+### How do I request a feature?
+
+1. Search existing [discussions](https://github.com/oxc-project/oxc/discussions)
+2. Open a discussion explaining:
+   - Use case
+   - Expected behavior
+   - Why it would benefit Oxc
+3. Wait for feedback before implementing
+
+## Architecture
+
+### What is the arena allocator?
+
+The `oxc_allocator` crate provides arena-based memory management:
+
+- All AST nodes are allocated in a single arena
+- Eliminates reference counting overhead
+- Improves performance through better cache locality
+- See [Architecture](/contribute/architecture) for details
+
+### What is the visitor pattern?
+
+Oxc uses the visitor pattern for AST traversal:
+
+- Visitor traits are automatically generated
+- Type-safe traversal of AST nodes
+- Used by linter, transformer, and other tools
+- See [Adding Rules](/contribute/adding-rules) for examples
+
+### How is Oxc different from ESTree?
+
+Oxc AST has distinct types instead of ambiguous nodes:
+
+- `BindingIdentifier` vs `IdentifierReference` vs `IdentifierName`
+- Better type safety
+- Closer to ECMAScript specification
+- See [Architecture](/contribute/architecture) for details
+
+## Troubleshooting
+
+### Command not found: `just`
+
+Install just:
+
+```bash
+cargo install just
+```
+
+### Command not found: `pnpm`
+
+Install pnpm:
+
+```bash
+npm install -g pnpm
+```
+
+### Rust version too old
+
+Update Rust:
+
+```bash
+rustup update
+```
+
+Oxc requires Rust 1.91 or later (MSRV policy: N-2).
+
+### Tests are slow
+
+Conformance tests can be slow. Run specific tests:
+
+```bash
+# Run only unit tests
+cargo test -p oxc_linter
+
+# Skip conformance tests during development
+just test
+```
+
+### Out of disk space
+
+Clean build artifacts:
+
+```bash
+cargo clean
+```
+
+Conformance test suites are large. Ensure you have at least 10GB free space.
+
+## Still Have Questions?
+
+If your question isn't answered here:
+
+1. Check the [Getting Started](/contribute/getting-started) guide
+2. Review the [Architecture](/contribute/architecture) documentation
+3. Read the [Testing](/contribute/testing) guide
+4. Ask on [Discord](https://discord.gg/9uXCAwqQZW)
+5. Open a [GitHub Discussion](https://github.com/oxc-project/oxc/discussions)
+
+We're here to help!

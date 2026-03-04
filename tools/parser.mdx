@@ -1,0 +1,623 @@
+---
+title: "Parser"
+description: "High-performance JavaScript and TypeScript parser with comprehensive AST support"
+icon: "file-code"
+---
+
+## Overview
+
+Oxc Parser is a blazing-fast JavaScript and TypeScript parser written in Rust. It provides complete support for the latest ECMAScript standards, TypeScript syntax, JSX, and TSX with an easy-to-use API.
+
+<CardGroup cols={2}>
+  <Card title="Full Language Support" icon="code">
+    ES2024+, TypeScript 5.x, JSX, and TSX with complete syntax coverage.
+  </Card>
+  <Card title="Spec Compliant" icon="check">
+    Passes all Test262, Babel, and TypeScript test suites.
+  </Card>
+  <Card title="High Performance" icon="bolt">
+    Optimized for speed with arena allocation and efficient algorithms.
+  </Card>
+  <Card title="Rich AST" icon="diagram-project">
+    Comprehensive AST with source locations, comments, and scope information.
+  </Card>
+</CardGroup>
+
+## Features
+
+### Language Support
+
+- **ECMAScript**: Full ES2024+ support including all stage 3+ proposals
+- **TypeScript**: Complete TypeScript 5.x syntax support
+- **JSX/TSX**: React JSX and TypeScript JSX
+- **Decorators**: Stage 3 decorators with metadata
+- **Import Attributes**: JSON modules and other import assertions
+
+### Parser Capabilities
+
+- **Error Recovery**: Continues parsing after syntax errors
+- **Source Locations**: Precise span information for every AST node
+- **Comments**: Preserves all comments with attachment information
+- **Tokens**: Optional token stream for syntax highlighting
+- **Module Records**: Import/export tracking for bundlers
+
+### Performance Optimizations
+
+- **Arena Allocation**: Fast AST allocation and deallocation
+- **Compact Spans**: Uses `u32` offsets instead of `usize`
+- **Lazy Parsing**: Defers semantic analysis to separate phase
+- **Zero-copy Strings**: Efficient string handling
+
+<Note>
+The parser can handle files up to 4 GiB due to `u32` span offsets. This limitation is not a concern for virtually all real-world use cases.
+</Note>
+
+## Node.js API
+
+### Installation
+
+```bash npm
+npm install oxc-parser
+```
+
+### Basic Usage
+
+```typescript
+import { parseSync } from 'oxc-parser';
+
+// Parse JavaScript/TypeScript code
+const result = parseSync('const x: number = 1;', {
+  sourceFilename: 'example.ts'
+});
+
+if (result.errors.length === 0) {
+  console.log('Parse successful!');
+  console.log(result.program);
+} else {
+  console.error('Parse errors:', result.errors);
+}
+```
+
+### Async Parsing
+
+```typescript
+import { parse } from 'oxc-parser';
+
+const result = await parse(sourceCode, {
+  sourceFilename: 'example.ts',
+  sourceType: 'module'
+});
+```
+
+### Parser Options
+
+```typescript
+interface ParseOptions {
+  /** Source filename for error messages and source maps */
+  sourceFilename?: string;
+  
+  /** Source type: 'script', 'module', 'unambiguous' */
+  sourceType?: 'script' | 'module' | 'unambiguous';
+  
+  /** Enable JSX parsing */
+  jsx?: boolean;
+  
+  /** Enable TypeScript parsing */
+  typescript?: boolean;
+  
+  /** TypeScript definition file (.d.ts) */
+  typescriptDefinition?: boolean;
+  
+  /** Include all tokens in output */
+  includeTokens?: boolean;
+  
+  /** Preserve parenthesized expressions */
+  preserveParens?: boolean;
+}
+```
+
+### Complete Example
+
+```typescript
+import { parseSync } from 'oxc-parser';
+import * as fs from 'fs';
+
+const sourceCode = fs.readFileSync('example.tsx', 'utf-8');
+
+const result = parseSync(sourceCode, {
+  sourceFilename: 'example.tsx',
+  sourceType: 'module',
+  jsx: true,
+  typescript: true
+});
+
+if (result.errors.length > 0) {
+  result.errors.forEach(error => {
+    console.error(`${error.message} at ${error.start}`);
+  });
+  process.exit(1);
+}
+
+// Access the AST
+const { program } = result;
+
+// program.body contains all top-level statements
+for (const statement of program.body) {
+  console.log(statement.type);
+}
+
+// Access comments
+if (result.comments) {
+  for (const comment of result.comments) {
+    console.log(`Comment: ${comment.value}`);
+  }
+}
+```
+
+## Rust API
+
+### Adding to Cargo.toml
+
+```toml Cargo.toml
+[dependencies]
+oxc_parser = "0.37"
+oxc_allocator = "0.37"
+oxc_span = "0.37"
+```
+
+### Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+fn main() {
+    let allocator = Allocator::default();
+    let source_text = "const x: number = 1;";
+    let source_type = SourceType::from_path("example.ts").unwrap();
+    
+    let parser_return = Parser::new(
+        &allocator,
+        source_text,
+        source_type
+    ).parse();
+    
+    if parser_return.errors.is_empty() {
+        println!("Parse successful!");
+        println!("AST: {:#?}", parser_return.program);
+    } else {
+        for error in parser_return.errors {
+            eprintln!("Error: {:?}", error);
+        }
+    }
+}
+```
+
+### Working with AST
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+use oxc_ast::ast::*;
+
+fn main() {
+    let allocator = Allocator::default();
+    let source_text = r#"
+        function add(a, b) {
+            return a + b;
+        }
+    "#;
+    let source_type = SourceType::default();
+    
+    let ret = Parser::new(&allocator, source_text, source_type).parse();
+    let program = ret.program;
+    
+    // Iterate through statements
+    for stmt in &program.body {
+        match stmt {
+            Statement::FunctionDeclaration(func) => {
+                println!("Function: {:?}", func.id.as_ref().unwrap().name);
+            }
+            _ => {}
+        }
+    }
+}
+```
+
+### Parser Configuration
+
+```rust
+use oxc_parser::config::{ParserConfig, LexerConfig};
+
+// Configure lexer
+let lexer_config = LexerConfig {
+    allow_return_outside_function: false,
+};
+
+// Configure parser  
+let parser_config = ParserConfig {
+    preserve_parens: true,
+    ..ParserConfig::default()
+};
+
+let parser_return = Parser::new(&allocator, source_text, source_type)
+    .with_config(parser_config)
+    .with_lexer_config(lexer_config)
+    .parse();
+```
+
+### Error Handling
+
+```rust
+let ret = Parser::new(&allocator, source_text, source_type).parse();
+
+if !ret.errors.is_empty() {
+    for error in ret.errors {
+        let span = error.span();
+        eprintln!(
+            "Parse error at {}:{}: {}",
+            span.start, span.end, error.message()
+        );
+    }
+}
+
+// Check if parser panicked (unrecoverable error)
+if ret.panicked {
+    eprintln!("Parser encountered unrecoverable error");
+}
+```
+
+## AST Structure
+
+### AST Node Types
+
+The AST follows the ESTree specification with TypeScript extensions:
+
+<AccordionGroup>
+  <Accordion title="Program & Statements" icon="file">
+    - `Program` - Root node containing all statements
+    - `BlockStatement` - `{ ... }`
+    - `VariableDeclaration` - `const`, `let`, `var`
+    - `FunctionDeclaration` - Function declarations
+    - `ClassDeclaration` - Class declarations
+    - `ImportDeclaration` - Import statements
+    - `ExportNamedDeclaration` - Named exports
+  </Accordion>
+  
+  <Accordion title="Expressions" icon="calculator">
+    - `Identifier` - Variable names
+    - `Literal` - String, number, boolean, null
+    - `BinaryExpression` - `a + b`, `x * y`
+    - `CallExpression` - Function calls
+    - `MemberExpression` - Property access
+    - `ArrowFunctionExpression` - Arrow functions
+    - `ObjectExpression` - Object literals
+    - `ArrayExpression` - Array literals
+  </Accordion>
+  
+  <Accordion title="TypeScript" icon="t">
+    - `TSTypeAnnotation` - Type annotations
+    - `TSInterfaceDeclaration` - Interfaces
+    - `TSTypeAliasDeclaration` - Type aliases
+    - `TSEnumDeclaration` - Enums
+    - `TSModuleDeclaration` - Namespaces
+    - `TSAsExpression` - Type assertions
+  </Accordion>
+  
+  <Accordion title="JSX" icon="react">
+    - `JSXElement` - JSX elements
+    - `JSXFragment` - JSX fragments
+    - `JSXAttribute` - JSX props
+    - `JSXSpreadAttribute` - Spread props
+    - `JSXText` - Text content
+  </Accordion>
+</AccordionGroup>
+
+### Span Information
+
+Every AST node includes precise source location:
+
+```typescript
+interface Span {
+  start: number;  // Byte offset of start
+  end: number;    // Byte offset of end
+}
+
+interface Node {
+  type: string;
+  span: Span;
+  // ... node-specific properties
+}
+```
+
+### Comments
+
+Comments are preserved separately:
+
+```typescript
+interface Comment {
+  type: 'Line' | 'Block';
+  value: string;
+  span: Span;
+}
+```
+
+## Advanced Usage
+
+### Visitor Pattern (Rust)
+
+Traverse the AST using the visitor pattern:
+
+```rust
+use oxc_ast_visit::Visit;
+use oxc_ast::ast::*;
+
+struct MyVisitor;
+
+impl<'a> Visit<'a> for MyVisitor {
+    fn visit_function_declaration(
+        &mut self, 
+        decl: &FunctionDeclaration<'a>
+    ) {
+        if let Some(id) = &decl.id {
+            println!("Found function: {}", id.name);
+        }
+    }
+    
+    fn visit_call_expression(
+        &mut self,
+        expr: &CallExpression<'a>
+    ) {
+        println!("Found function call");
+    }
+}
+
+// Use the visitor
+let mut visitor = MyVisitor;
+visitor.visit_program(&program);
+```
+
+### Semantic Analysis
+
+Combine parser with semantic analyzer:
+
+```rust
+use oxc_semantic::SemanticBuilder;
+
+let parser_return = Parser::new(&allocator, source_text, source_type).parse();
+let program = parser_return.program;
+
+// Build semantic information (scopes, symbols, references)
+let semantic = SemanticBuilder::new()
+    .build(&program)
+    .semantic;
+
+// Access scope information
+for scope_id in semantic.scopes().iter_scope_ids() {
+    let scope = semantic.scopes().get_scope(scope_id);
+    println!("Scope flags: {:?}", scope.flags);
+}
+
+// Access symbol information
+for symbol_id in semantic.symbols().iter_symbol_ids() {
+    let symbol = semantic.symbols().get_symbol(symbol_id);
+    println!("Symbol: {}", symbol.name());
+}
+```
+
+### Module Records
+
+Track imports and exports:
+
+```rust
+let parser_return = Parser::new(&allocator, source_text, source_type).parse();
+let module_record = parser_return.module_record;
+
+// Check import statements
+for import in &module_record.import_entries {
+    println!(
+        "Import {} from {}",
+        import.import_name,
+        import.module_request
+    );
+}
+
+// Check export statements
+for export in &module_record.export_entries {
+    println!("Export: {}", export.export_name);
+}
+```
+
+## Source Types
+
+The parser needs to know what kind of file it's parsing:
+
+```typescript
+// Automatic detection from filename
+const tsResult = parseSync(code, {
+  sourceFilename: 'example.ts'
+});
+
+// Explicit source type
+const jsxResult = parseSync(code, {
+  jsx: true,
+  typescript: false
+});
+```
+
+```rust
+// From path
+let source_type = SourceType::from_path("example.tsx").unwrap();
+
+// Manual construction
+let source_type = SourceType::default()
+    .with_module(true)
+    .with_jsx(true)
+    .with_typescript(true);
+
+// Specific types
+let ts = SourceType::ts();
+let tsx = SourceType::tsx();
+let jsx = SourceType::jsx();
+let mjs = SourceType::mjs();
+```
+
+## Performance Characteristics
+
+### Benchmarks
+
+The parser is highly optimized:
+
+- **Speed**: Parses large files (100KB+) in milliseconds
+- **Memory**: Uses arena allocation for minimal overhead
+- **Scalability**: Linear time complexity
+
+### Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Reuse Allocator" icon="recycle">
+    Create one allocator and reuse for multiple parses in Rust.
+  </Card>
+  <Card title="Batch Parsing" icon="layer-group">
+    Parse multiple files in parallel for maximum throughput.
+  </Card>
+  <Card title="Error Recovery" icon="shield-halved">
+    Parser continues after errors - check `errors` array.
+  </Card>
+  <Card title="Lazy Analysis" icon="clock">
+    Parser doesn't do semantic analysis - use `oxc_semantic` separately.
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Linters">
+    Build custom linting rules:
+    
+    ```typescript
+    const result = parseSync(code, { sourceFilename: 'file.ts' });
+    
+    // Check for specific patterns
+    function findConsoleUsage(program) {
+      // Traverse AST and find console.* calls
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Code Transformers">
+    Transform code:
+    
+    ```typescript
+    const result = parseSync(code);
+    // Modify AST
+    // Use oxc_codegen to generate code
+    ```
+  </Tab>
+  
+  <Tab title="Documentation Tools">
+    Extract documentation:
+    
+    ```typescript
+    const result = parseSync(code, { 
+      typescript: true 
+    });
+    
+    // Extract exported functions, types, interfaces
+    // Generate API documentation
+    ```
+  </Tab>
+  
+  <Tab title="Bundlers">
+    Analyze dependencies:
+    
+    ```rust
+    let ret = Parser::new(&allocator, source, source_type).parse();
+    let module_record = ret.module_record;
+    
+    // Track imports for dependency graph
+    for import in &module_record.import_entries {
+        // Add to dependency graph
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Compatibility
+
+### Test Coverage
+
+The parser passes conformance tests from:
+
+- **Test262**: Official ECMAScript test suite
+- **Babel**: Comprehensive JavaScript/JSX tests
+- **TypeScript**: Official TypeScript compiler tests
+
+### Standards Compliance
+
+- **ECMAScript**: ES2024 and all stage 3+ proposals
+- **TypeScript**: Version 5.x syntax
+- **JSX**: React JSX specification
+- **ESTree**: Follows ESTree AST specification
+
+## Comparison with Other Parsers
+
+| Feature | Oxc Parser | Babel | TypeScript | SWC |
+|---------|-----------|-------|------------|-----|
+| **Language** | Rust | JavaScript | TypeScript | Rust |
+| **Speed** | Very Fast | Slow | Medium | Very Fast |
+| **ES Support** | Latest | Latest | Latest | Latest |
+| **TS Support** | Full | Via plugin | Full | Full |
+| **Error Recovery** | Yes | Yes | Yes | Limited |
+| **AST Format** | ESTree | ESTree | TS AST | ESTree |
+
+## Limitations
+
+<Warning>
+- **Max file size**: 4 GiB (due to u32 spans)
+- **No semantic analysis**: Use `oxc_semantic` separately
+- **Syntax only**: Doesn't validate TypeScript types
+</Warning>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/oxc-project/oxc">
+    Source code and examples
+  </Card>
+  <Card title="Rust Docs" icon="rust" href="https://docs.rs/oxc_parser">
+    Complete Rust API documentation
+  </Card>
+  <Card title="npm Package" icon="npm" href="https://www.npmjs.com/package/oxc-parser">
+    Node.js bindings
+  </Card>
+  <Card title="AST Explorer" icon="diagram-project" href="https://oxc.rs/playground">
+    Explore AST interactively
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="What's the difference between oxc_parser and the full oxc package?">
+    `oxc_parser` is just the parser. The full `oxc` crate includes parser, semantic analysis, linter, transformer, and minifier.
+  </Accordion>
+  
+  <Accordion title="Can I use the parser with Babel plugins?">
+    No, the parser produces an AST but doesn't have a Babel plugin system. However, you can use the transformer for many common transformations.
+  </Accordion>
+  
+  <Accordion title="Does the parser validate TypeScript types?">
+    No, it only parses TypeScript syntax. For type checking, use the TypeScript compiler.
+  </Accordion>
+  
+  <Accordion title="How do I convert the AST back to code?">
+    Use `oxc_codegen` crate (Rust) or the transformer API (Node.js) to generate code from the AST.
+  </Accordion>
+  
+  <Accordion title="Is the AST format stable?">
+    The AST follows ESTree with TypeScript extensions. While we aim for stability, breaking changes may occur in major versions.
+  </Accordion>
+</AccordionGroup>

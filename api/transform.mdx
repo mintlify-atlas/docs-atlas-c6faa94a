@@ -1,0 +1,822 @@
+---
+title: "Transform API"
+description: "Transform JavaScript and TypeScript with Babel-like functionality using oxc-transform"
+icon: "wand-magic-sparkles"
+---
+
+# oxc-transform
+
+A high-performance JavaScript and TypeScript transformer for Node.js. Transform modern JavaScript to target specific ECMAScript versions, transpile TypeScript, transform JSX, and apply code transformations.
+
+## Installation
+
+```bash
+npm install oxc-transform
+```
+
+```bash
+pnpm add oxc-transform
+```
+
+```bash
+yarn add oxc-transform
+```
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { transformSync } from 'oxc-transform';
+
+    const result = transformSync(
+      'app.tsx',
+      'const App = () => <div>Hello</div>;',
+      { jsx: { runtime: 'automatic' } }
+    );
+
+    console.log(result.code);
+    // Output: import { jsx } from "react/jsx-runtime";
+    //         const App = () => jsx("div", { children: "Hello" });
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const { transformSync } = require('oxc-transform');
+
+    const result = transformSync(
+      'app.jsx',
+      'const App = () => <div>Hello</div>;',
+      { jsx: { runtime: 'automatic' } }
+    );
+
+    console.log(result.code);
+    ```
+  </Tab>
+</Tabs>
+
+## API Functions
+
+### transformSync
+
+**Synchronous transformation** on the current thread. This is the recommended function for most use cases.
+
+```typescript
+function transformSync(
+  filename: string,
+  sourceText: string,
+  options?: TransformOptions
+): TransformResult
+```
+
+<ParamField path="filename" type="string" required>
+  The name of the file being transformed. Used to infer language from extension and for source maps. If using a relative path, consider setting the `cwd` option.
+</ParamField>
+
+<ParamField path="sourceText" type="string" required>
+  The JavaScript or TypeScript source code to transform.
+</ParamField>
+
+<ParamField path="options" type="TransformOptions">
+  Configuration options for transformation. See [TransformOptions](#transformoptions) for details.
+</ParamField>
+
+**Returns:** [TransformResult](#transformresult)
+
+#### Example
+
+```typescript
+import { transformSync } from 'oxc-transform';
+
+const result = transformSync(
+  'module.ts',
+  `
+  interface User {
+    name: string;
+  }
+  export const greet = (user: User) => \`Hello, \${user.name}\`;
+  `,
+  {
+    target: 'es2015',
+    sourcemap: true
+  }
+);
+
+console.log(result.code);
+console.log(result.map);
+```
+
+### transform
+
+**Asynchronous transformation** on a separate thread.
+
+<Note>
+  This function can be slower than `transformSync` due to thread spawning overhead. Use `transformSync` unless you have a specific need for async.
+</Note>
+
+```typescript
+function transform(
+  filename: string,
+  sourceText: string,
+  options?: TransformOptions
+): Promise<TransformResult>
+```
+
+<ParamField path="filename" type="string" required>
+  The name of the file being transformed.
+</ParamField>
+
+<ParamField path="sourceText" type="string" required>
+  The source code to transform.
+</ParamField>
+
+<ParamField path="options" type="TransformOptions">
+  Configuration options for transformation.
+</ParamField>
+
+**Returns:** `Promise<TransformResult>`
+
+## TransformOptions
+
+Comprehensive configuration options for code transformation.
+
+### Basic Options
+
+<ParamField path="lang" type="'js' | 'jsx' | 'ts' | 'tsx' | 'dts'">
+  Explicitly specify the language. If not provided, inferred from filename.
+</ParamField>
+
+<ParamField path="sourceType" type="'script' | 'module' | 'commonjs' | 'unambiguous'">
+  How to interpret the source code.
+</ParamField>
+
+<ParamField path="cwd" type="string">
+  Current working directory. Used to resolve relative paths in other options.
+</ParamField>
+
+<ParamField path="sourcemap" type="boolean" default="false">
+  Enable source map generation. Populates the `map` field in the result.
+
+  ```typescript
+  const result = transformSync('app.js', code, { sourcemap: true });
+  console.log(result.map); // Source map object
+  ```
+</ParamField>
+
+### Target Environment
+
+<ParamField path="target" type="string | string[]" default="esnext">
+  Sets the target environment for the generated code. The lowest target is `es2015`.
+
+  **Single target:**
+  ```typescript
+  { target: 'es2020' }
+  ```
+
+  **Multiple targets:**
+  ```typescript
+  {
+    target: [
+      'es2020',
+      'chrome58',
+      'edge16',
+      'firefox57',
+      'node12',
+      'safari11'
+    ]
+  }
+  ```
+
+  When set to `'esnext'` (default), no transformations are applied.
+</ParamField>
+
+### TypeScript Options
+
+<ParamField path="typescript" type="TypeScriptOptions">
+  Configure TypeScript-specific transformations.
+
+  ```typescript
+  interface TypeScriptOptions {
+    // Generate .d.ts declaration files
+    declaration?: IsolatedDeclarationsOptions;
+    
+    // Remove class fields without initializers
+    removeClassFieldsWithoutInitializer?: boolean;
+    
+    // Rewrite import extensions (.ts -> .js)
+    rewriteImportExtensions?: 'rewrite' | 'remove' | boolean;
+    
+    // Only remove type imports (preserve value imports)
+    onlyRemoveTypeImports?: boolean;
+    
+    // JSX pragma for classic JSX (deprecated, use jsx option)
+    jsxPragma?: string;
+    jsxPragmaFrag?: string;
+  }
+  ```
+
+  **Declaration generation:**
+  ```typescript
+  const result = transformSync('lib.ts', code, {
+    typescript: {
+      declaration: {
+        stripInternal: true  // Remove @internal from declarations
+      }
+    }
+  });
+  
+  console.log(result.declaration); // .d.ts content
+  console.log(result.declarationMap); // declaration source map
+  ```
+
+  **Import extension rewriting:**
+  ```typescript
+  // Input: import { foo } from './bar.ts';
+  
+  // With rewriteImportExtensions: 'rewrite'
+  // Output: import { foo } from './bar.js';
+  
+  // With rewriteImportExtensions: 'remove'
+  // Output: import { foo } from './bar';
+  ```
+</ParamField>
+
+### JSX/TSX Options
+
+<ParamField path="jsx" type="'preserve' | JsxOptions">
+  Configure JSX transformation. Set to `'preserve'` to keep JSX syntax unchanged.
+
+  ```typescript
+  interface JsxOptions {
+    // JSX runtime mode
+    runtime?: 'classic' | 'automatic';  // default: 'automatic'
+    
+    // Development mode (adds __source, __self)
+    development?: boolean;  // default: false
+    
+    // Import source for JSX functions
+    importSource?: string;  // default: 'react'
+    
+    // Throw on XML namespaced tags
+    throwIfNamespace?: boolean;  // default: true
+    
+    // Mark JSX as pure for tree shaking
+    pure?: boolean;  // default: true
+    
+    // Classic mode options
+    pragma?: string;  // default: 'React.createElement'
+    pragmaFrag?: string;  // default: 'React.Fragment'
+    
+    // React Fast Refresh
+    refresh?: boolean | ReactRefreshOptions;
+  }
+  ```
+
+  **Automatic runtime (React 17+):**
+  ```typescript
+  const result = transformSync('App.jsx', code, {
+    jsx: {
+      runtime: 'automatic',
+      importSource: 'react'  // or 'preact', '@emotion/react', etc.
+    }
+  });
+  ```
+
+  **Classic runtime:**
+  ```typescript
+  const result = transformSync('App.jsx', code, {
+    jsx: {
+      runtime: 'classic',
+      pragma: 'h',  // Use h() instead of React.createElement()
+      pragmaFrag: 'Fragment'
+    }
+  });
+  ```
+
+  **React Fast Refresh:**
+  ```typescript
+  const result = transformSync('App.jsx', code, {
+    jsx: {
+      refresh: {
+        refreshReg: '$RefreshReg$',
+        refreshSig: '$RefreshSig$'
+      }
+    }
+  });
+  ```
+</ParamField>
+
+### Compiler Assumptions
+
+<ParamField path="assumptions" type="CompilerAssumptions">
+  Set assumptions to produce smaller output. Use with caution - only enable if assumptions hold true for your code.
+
+  ```typescript
+  interface CompilerAssumptions {
+    // Object.assign doesn't trigger getters
+    pureGetters?: boolean;
+    
+    // Object rest doesn't include symbols
+    objectRestNoSymbols?: boolean;
+    
+    // Class fields can use assignment (not defineProperty)
+    setPublicClassFields?: boolean;
+    
+    // Don't preserve function.length
+    ignoreFunctionLength?: boolean;
+    
+    // document.all is not used
+    noDocumentAll?: boolean;
+  }
+  ```
+
+  **Example:**
+  ```typescript
+  const result = transformSync('app.js', code, {
+    assumptions: {
+      setPublicClassFields: true,
+      objectRestNoSymbols: true
+    },
+    target: 'es2015'
+  });
+  ```
+</ParamField>
+
+### Helper Functions
+
+<ParamField path="helpers" type="Helpers">
+  Configure how runtime helper functions are injected.
+
+  ```typescript
+  interface Helpers {
+    mode?: 'Runtime' | 'External';  // default: 'Runtime'
+  }
+  ```
+
+  **Runtime mode (default):**
+  ```typescript
+  // Helpers are imported from @oxc-project/runtime
+  const result = transformSync('app.js', '({ ...x })', {
+    target: 'es2015',
+    helpers: { mode: 'Runtime' }
+  });
+  // Output: import _objectSpread from "@oxc-project/runtime/helpers/objectSpread2";
+  //         _objectSpread({}, x);
+  ```
+
+  **External mode:**
+  ```typescript
+  // Helpers accessed from global babelHelpers object
+  const result = transformSync('app.js', '({ ...x })', {
+    target: 'es2015',
+    helpers: { mode: 'External' }
+  });
+  // Output: babelHelpers.objectSpread2({}, x);
+  ```
+</ParamField>
+
+### Plugins
+
+<ParamField path="define" type="Record<string, string>">
+  Replace global variables with constant expressions at compile time.
+
+  ```typescript
+  const result = transformSync('app.js',
+    'if (process.env.NODE_ENV === "production") { /* ... */ }',
+    {
+      define: {
+        'process.env.NODE_ENV': '"development"'
+      }
+    }
+  );
+  // The if block is removed (dead code elimination)
+  ```
+</ParamField>
+
+<ParamField path="inject" type="Record<string, string | [string, string]>">
+  Automatically import identifiers from modules.
+
+  ```typescript
+  const result = transformSync('app.js',
+    'const x = Object.assign({}, y);',
+    {
+      inject: {
+        'Object.assign': 'object-assign'
+      }
+    }
+  );
+  // Output: import $inject_Object_assign from "object-assign";
+  //         const x = $inject_Object_assign({}, y);
+  ```
+
+  **Named imports:**
+  ```typescript
+  {
+    inject: {
+      Promise: ['es6-promise', 'Promise']
+    }
+  }
+  // Output: import { Promise } from "es6-promise";
+  ```
+</ParamField>
+
+<ParamField path="decorator" type="DecoratorOptions">
+  Configure decorator transformation.
+
+  ```typescript
+  interface DecoratorOptions {
+    // Use legacy decorators (pre-TC39 standardization)
+    legacy?: boolean;  // default: false
+    
+    // Emit decorator metadata (TypeScript)
+    emitDecoratorMetadata?: boolean;  // default: false
+  }
+  ```
+
+  **Example:**
+  ```typescript
+  const result = transformSync('app.ts', code, {
+    decorator: {
+      legacy: true,
+      emitDecoratorMetadata: true
+    }
+  });
+  ```
+</ParamField>
+
+<ParamField path="plugins" type="PluginsOptions">
+  Third-party plugin configurations.
+
+  ```typescript
+  interface PluginsOptions {
+    // styled-components plugin
+    styledComponents?: StyledComponentsOptions;
+    
+    // Escape template literal tags
+    taggedTemplateEscape?: boolean;
+  }
+  ```
+
+  **styled-components:**
+  ```typescript
+  const result = transformSync('Button.js', code, {
+    plugins: {
+      styledComponents: {
+        displayName: true,
+        ssr: true,
+        minify: true,
+        transpileTemplateLiterals: true,
+        pure: true,
+        namespace: 'my-app'
+      }
+    }
+  });
+  ```
+</ParamField>
+
+## TransformResult
+
+The result of transformation, containing the transformed code, source maps, declarations, and any errors.
+
+<ResponseField name="code" type="string">
+  The transformed JavaScript code. Empty string if parsing failed.
+
+  ```typescript
+  const { code } = transformSync('app.ts', sourceCode);
+  console.log(code);
+  ```
+</ResponseField>
+
+<ResponseField name="map" type="SourceMap | undefined">
+  Source map for the transformed code. Only present if `sourcemap: true`.
+
+  ```typescript
+  interface SourceMap {
+    version: number;
+    sources: string[];
+    sourcesContent?: string[];
+    names: string[];
+    mappings: string;
+    file?: string;
+    sourceRoot?: string;
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="declaration" type="string | undefined">
+  Generated `.d.ts` declaration file content. Only present if `typescript.declaration` is set and input is TypeScript.
+
+  ```typescript
+  const result = transformSync('lib.ts', code, {
+    typescript: { declaration: {} }
+  });
+  console.log(result.declaration); // TypeScript declarations
+  ```
+</ResponseField>
+
+<ResponseField name="declarationMap" type="SourceMap | undefined">
+  Source map for the declaration file. Only present if both `sourcemap` and `typescript.declaration` are enabled.
+</ResponseField>
+
+<ResponseField name="helpersUsed" type="Record<string, string>">
+  Map of helper functions used during transformation and their import paths.
+
+  ```typescript
+  const result = transformSync('app.js', '({ ...x })', { target: 'es2015' });
+  console.log(result.helpersUsed);
+  // { "objectSpread2": "@oxc-project/runtime/helpers/objectSpread2" }
+  ```
+</ResponseField>
+
+<ResponseField name="errors" type="OxcError[]">
+  Parse and transformation errors. Oxc's parser recovers from errors, so code may be available even with errors present.
+
+  ```typescript
+  if (result.errors.length > 0) {
+    result.errors.forEach(error => {
+      console.error(error.message);
+      if (error.codeframe) console.error(error.codeframe);
+    });
+  }
+  ```
+</ResponseField>
+
+## Common Use Cases
+
+### TypeScript to JavaScript
+
+```typescript
+import { transformSync } from 'oxc-transform';
+
+const tsCode = `
+  interface Config {
+    timeout: number;
+  }
+
+  export class ApiClient {
+    private config: Config;
+
+    constructor(config: Config) {
+      this.config = config;
+    }
+
+    async fetch<T>(url: string): Promise<T> {
+      // implementation
+    }
+  }
+`;
+
+const result = transformSync('client.ts', tsCode, {
+  sourceType: 'module'
+});
+
+console.log(result.code);
+// TypeScript syntax removed, JavaScript remains
+```
+
+### ES2020+ to ES2015
+
+```typescript
+const modernJs = `
+  const user = { name: 'Alice', ...defaults };
+  const greeting = user?.name ?? 'Guest';
+  class Handler {
+    #private = 42;
+    static { console.log('static block'); }
+  }
+`;
+
+const result = transformSync('app.js', modernJs, {
+  target: 'es2015',
+  sourceType: 'module'
+});
+
+console.log(result.code);
+// All modern syntax transformed to ES2015
+```
+
+### JSX Transformation
+
+```typescript
+const jsxCode = `
+  import { useState } from 'react';
+
+  export function Counter() {
+    const [count, setCount] = useState(0);
+    return (
+      <div className="counter">
+        <p>Count: {count}</p>
+        <button onClick={() => setCount(count + 1)}>
+          Increment
+        </button>
+      </div>
+    );
+  }
+`;
+
+const result = transformSync('Counter.jsx', jsxCode, {
+  jsx: {
+    runtime: 'automatic',
+    development: false
+  },
+  sourceType: 'module'
+});
+
+console.log(result.code);
+```
+
+### Environment Variables (Define Plugin)
+
+```typescript
+const code = `
+  if (DEBUG) {
+    console.log('Debug mode enabled');
+  }
+  
+  const apiUrl = API_URL;
+`;
+
+const result = transformSync('config.js', code, {
+  define: {
+    DEBUG: 'false',
+    API_URL: '"https://api.example.com"'
+  }
+});
+
+// Debug block removed, API_URL replaced with string
+```
+
+### Decorator Transformation
+
+```typescript
+const decoratedCode = `
+  @sealed
+  class Person {
+    @logged
+    name: string;
+
+    @validate
+    setName(@required newName: string) {
+      this.name = newName;
+    }
+  }
+`;
+
+const result = transformSync('person.ts', decoratedCode, {
+  decorator: {
+    legacy: true,
+    emitDecoratorMetadata: true
+  }
+});
+
+console.log(result.code);
+```
+
+### Generate Declaration Files
+
+```typescript
+const libCode = `
+  export interface Options {
+    retries: number;
+  }
+
+  export function request(url: string, options?: Options): Promise<Response> {
+    // implementation
+  }
+`;
+
+const result = transformSync('api.ts', libCode, {
+  typescript: {
+    declaration: {
+      stripInternal: true  // Remove @internal declarations
+    }
+  },
+  sourcemap: true
+});
+
+console.log(result.code);           // JavaScript
+console.log(result.declaration);    // .d.ts
+console.log(result.declarationMap); // .d.ts.map
+```
+
+## Performance Tips
+
+<Card title="Use transformSync" icon="bolt">
+  The synchronous API is faster for individual files as it avoids thread spawning overhead.
+</Card>
+
+<Card title="Set Specific Targets" icon="bullseye">
+  Only transform what's necessary. Use `target: 'esnext'` to disable all transformations when targeting modern environments.
+  
+  ```typescript
+  // Only transform arrow functions and spread
+  { target: 'es2017' }
+  
+  // Transform everything
+  { target: 'es2015' }
+  
+  // No transformations
+  { target: 'esnext' }
+  ```
+</Card>
+
+<Card title="Enable Assumptions" icon="gauge-high">
+  Assumptions can reduce code size but only use them if they're safe for your codebase.
+  
+  ```typescript
+  {
+    assumptions: {
+      setPublicClassFields: true,  // Smaller class field output
+      objectRestNoSymbols: true     // Faster object spread
+    }
+  }
+  ```
+</Card>
+
+<Card title="Source Maps in Production" icon="map">
+  Only enable source maps when needed. They add processing overhead.
+  
+  ```typescript
+  const isDev = process.env.NODE_ENV === 'development';
+  const result = transformSync(filename, code, {
+    sourcemap: isDev
+  });
+  ```
+</Card>
+
+## Error Handling
+
+```typescript
+import { transformSync, type OxcError } from 'oxc-transform';
+
+function transform(filename: string, code: string) {
+  const result = transformSync(filename, code, {
+    target: 'es2015',
+    jsx: { runtime: 'automatic' }
+  });
+
+  if (result.errors.length > 0) {
+    console.error(`Transformation errors in ${filename}:`);
+    
+    result.errors.forEach((error: OxcError) => {
+      console.error(`  [${error.severity}] ${error.message}`);
+      
+      error.labels.forEach(label => {
+        if (label.message) {
+          console.error(`    ${label.message} at ${label.start}:${label.end}`);
+        }
+      });
+      
+      if (error.helpMessage) {
+        console.log(`  Help: ${error.helpMessage}`);
+      }
+      
+      if (error.codeframe) {
+        console.error(error.codeframe);
+      }
+    });
+    
+    // Decide whether to use result.code or throw
+    if (result.code === '') {
+      throw new Error('Transformation failed');
+    }
+  }
+
+  return result;
+}
+```
+
+## Type Definitions
+
+Full TypeScript definitions are included:
+
+```typescript
+import type {
+  TransformOptions,
+  TransformResult,
+  TypeScriptOptions,
+  JsxOptions,
+  CompilerAssumptions,
+  DecoratorOptions,
+  HelperMode,
+  SourceMap,
+  OxcError
+} from 'oxc-transform';
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Parser API" icon="code" href="/api/parser">
+    Parse JavaScript/TypeScript into an AST
+  </Card>
+  <Card title="Minifier API" icon="compress" href="/api/minify">
+    Minify JavaScript for production
+  </Card>
+  <Card title="Transformer Tool" icon="book" href="/tools/transformer">
+    Learn more about the Oxc transformer
+  </Card>
+  <Card title="Node.js Integration" icon="node-js" href="/guide/nodejs-integration">
+    Integrate Oxc into your Node.js workflow
+  </Card>
+</CardGroup>

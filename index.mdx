@@ -1,97 +1,218 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Oxc Documentation"
+description: "High-performance JavaScript and TypeScript tooling built with Rust"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-[#0f1015] dark:bg-[#0f1015] py-20">
+  <div className="max-w-6xl mx-auto px-6 lg:px-8">
+    <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white dark:text-white mb-6">
+          The Oxidation Compiler
+        </h1>
+        <p className="text-lg sm:text-xl text-gray-300 dark:text-gray-300 max-w-2xl mb-8">
+          A collection of high-performance JavaScript and TypeScript tools written in Rust. Blazing fast parser, linter, formatter, transformer, and minifier for modern web development.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-[#747474] hover:bg-[#5a5a5a] text-white font-semibold transition-colors no-underline"
+          >
+            Get Started
+            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a 
+            href="/architecture/overview" 
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors no-underline"
+          >
+            Learn Architecture
+          </a>
+        </div>
+      </div>
+      <div className="hidden lg:block lg:col-span-5">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-[#747474]/20 to-[#2de6e6]/20 blur-3xl"></div>
+          <div className="relative bg-[#121217] dark:bg-[#121217] border border-[#2a2a33] dark:border-[#2a2a33] rounded-lg p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <pre className="text-sm text-gray-300 dark:text-gray-300 overflow-x-auto">
+              <code>{`$ npx oxlint@latest
 
-Get your documentation site up and running in minutes.
+Finished in 0.7s
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Found 0 errors and 0 warnings`}</code>
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get up and running with Oxc in seconds
+  </p>
+  
+  <Steps>
+    <Step title="Install oxlint">
+      Run the linter on your JavaScript or TypeScript project:
+      
+      ```bash
+      npx oxlint@latest
+      ```
+      
+      Oxlint will automatically discover and lint all JavaScript/TypeScript files in your project with sensible defaults.
+    </Step>
+    
+    <Step title="Add to your project">
+      Install Oxc tools as dev dependencies:
+      
+      <CodeGroup>
+      ```bash npm
+      npm install -D oxlint oxfmt
+      ```
+      
+      ```bash yarn
+      yarn add -D oxlint oxfmt
+      ```
+      
+      ```bash pnpm
+      pnpm add -D oxlint oxfmt
+      ```
+      </CodeGroup>
+    </Step>
+    
+    <Step title="Configure and customize">
+      Create an `oxlintrc.json` configuration file to customize rules:
+      
+      ```json oxlintrc.json
+      {
+        "rules": {
+          "no-unused-vars": "warn",
+          "no-console": "off"
+        }
+      }
+      ```
+      
+      See the [configuration guide](/guide/configuration) for all available options.
+    </Step>
+  </Steps>
+</div>
 
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Explore Oxc tools
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    A complete toolchain for JavaScript and TypeScript development
+  </p>
+  
+  <CardGroup cols={3}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Linter"
+      icon="check-circle"
+      href="/tools/linter"
+    >
+      ESLint-compatible linter with 200+ rules. 10-100x faster than ESLint.
+    </Card>
+    <Card
+      title="Formatter"
+      icon="paintbrush"
+      href="/tools/formatter"
+    >
+      Prettier-compatible code formatter with blazing fast performance.
+    </Card>
+    <Card
+      title="Parser"
+      icon="file-code"
+      href="/tools/parser"
+    >
+      Full ES2024+ and TypeScript parser with comprehensive AST support.
+    </Card>
+    <Card
+      title="Transformer"
+      icon="arrows-rotate"
+      href="/tools/transformer"
+    >
+      TypeScript, JSX, and modern JavaScript transformation.
+    </Card>
+    <Card
+      title="Minifier"
+      icon="compress"
+      href="/tools/minifier"
+    >
+      High-performance code minification with dead code elimination.
+    </Card>
+    <Card
+      title="Resolver"
+      icon="magnifying-glass"
+      href="/tools/resolver"
+    >
+      Node.js-style module resolution for build tools.
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    For library and tooling authors
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Use Oxc components to build your own JavaScript tooling
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card
+      title="Node.js APIs"
+      icon="node-js"
+      href="/api/parser"
+    >
+      Use oxc-parser, oxc-transform, and oxc-minify from Node.js with NAPI bindings.
+    </Card>
+    <Card
+      title="Rust APIs"
+      icon="rust"
+      href="/api/rust/parser"
+    >
+      Build high-performance tools with Oxc's modular Rust crates.
+    </Card>
+  </CardGroup>
+</div>
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="bg-[#121217] dark:bg-[#121217] border border-[#2a2a33] dark:border-[#2a2a33] rounded-lg p-8">
+    <h2 className="text-2xl font-bold text-white dark:text-white mb-3">
+      Ready to build faster?
+    </h2>
+    <p className="text-gray-300 dark:text-gray-300 mb-6 max-w-2xl">
+      Join the community building the next generation of JavaScript tooling with Oxc.
+    </p>
+    <div className="flex flex-wrap gap-4">
+      <a 
+        href="/quickstart" 
+        className="inline-flex items-center px-6 py-3 rounded-lg bg-[#747474] hover:bg-[#5a5a5a] text-white font-semibold transition-colors no-underline"
+      >
+        Get Started
+      </a>
+      <a 
+        href="https://github.com/oxc-project/oxc" 
+        className="inline-flex items-center px-6 py-3 rounded-lg border border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold transition-colors no-underline"
+      >
+        <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+          <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+        </svg>
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</div>

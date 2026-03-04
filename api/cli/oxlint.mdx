@@ -1,0 +1,714 @@
+---
+title: oxlint CLI Reference
+description: Complete command-line reference for oxlint, Oxc's high-performance JavaScript/TypeScript linter
+---
+
+# oxlint CLI Reference
+
+oxlint is a high-performance JavaScript and TypeScript linter written in Rust. It's designed to catch errors and enforce code quality without requiring a configuration file.
+
+## Installation
+
+```bash
+npm install -D oxlint
+# or
+pnpm add -D oxlint
+# or
+yarn add -D oxlint
+```
+
+## Basic Usage
+
+```bash
+# Lint current directory
+oxlint
+
+# Lint specific files or directories
+oxlint src/
+oxlint file1.js file2.ts
+
+# Lint and auto-fix issues
+oxlint --fix src/
+```
+
+## Commands
+
+### Default Command (Lint)
+
+The default command runs the linter on specified paths.
+
+```bash
+oxlint [OPTIONS] [PATH...]
+```
+
+### Special Commands
+
+<ParamField path="--rules" type="flag">
+  List all available linting rules with their categories and descriptions.
+  
+  ```bash
+  oxlint --rules
+  ```
+</ParamField>
+
+<ParamField path="--init" type="flag">
+  Initialize a new `.oxlintrc.json` configuration file with default values.
+  
+  ```bash
+  oxlint --init
+  ```
+</ParamField>
+
+<ParamField path="--lsp" type="flag">
+  Start the Language Server Protocol (LSP) server for editor integration.
+  
+  ```bash
+  oxlint --lsp
+  ```
+</ParamField>
+
+## Configuration Options
+
+### Basic Configuration
+
+<ParamField path="-c, --config" type="path" default=".oxlintrc.json">
+  Path to the oxlint configuration file.
+  
+  Supported formats:
+  - `.json` and `.jsonc` files (all runtimes)
+  - JavaScript/TypeScript config files (experimental, requires Node.js)
+  - Comments are supported in configuration files
+  - Compatible with ESLint v8's format
+  
+  If not provided, oxlint searches for `.oxlintrc.json`, `.oxlintrc.jsonc`, or `oxlint.config.ts` in the current directory.
+  
+  ```bash
+  oxlint --config custom-config.json src/
+  ```
+</ParamField>
+
+<ParamField path="--tsconfig" type="path" default="./tsconfig.json">
+  Path to TypeScript `tsconfig.json` for reading path aliases and project references (used by the import plugin).
+  
+  If not provided, oxlint looks for `tsconfig.json` in the current working directory.
+  
+  ```bash
+  oxlint --tsconfig ./configs/tsconfig.json src/
+  ```
+</ParamField>
+
+<ParamField path="--disable-nested-config" type="flag">
+  Disable automatic loading of nested configuration files.
+  
+  By default, oxlint loads configuration files found in subdirectories. This flag disables that behavior.
+  
+  ```bash
+  oxlint --disable-nested-config src/
+  ```
+</ParamField>
+
+### Rule Configuration
+
+oxlint uses a category-based rule system. Rules can be enabled or disabled using command-line flags.
+
+#### Rule Categories
+
+- `correctness` - Code that is outright wrong or useless (enabled by default)
+- `suspicious` - Code that is most likely wrong or useless
+- `pedantic` - Strict lints with occasional false positives
+- `perf` - Code that could be more performant
+- `style` - Code that should be written more idiomatically
+- `restriction` - Lints preventing use of language/library features
+- `nursery` - New lints under development
+- `all` - All categories except nursery (does not auto-enable plugins)
+
+<ParamField path="-A, --allow" type="string">
+  Allow (suppress) a rule or category.
+  
+  Can be specified multiple times. Rules are processed left-to-right.
+  
+  ```bash
+  # Allow all rules in the pedantic category
+  oxlint -A pedantic src/
+  
+  # Allow specific rule
+  oxlint -A no-debugger src/
+  
+  # Allow all, then deny specific rules
+  oxlint -A all -D no-debugger src/
+  ```
+</ParamField>
+
+<ParamField path="-W, --warn" type="string">
+  Warn on a rule or category (emit a warning instead of error).
+  
+  ```bash
+  oxlint -W suspicious src/
+  ```
+</ParamField>
+
+<ParamField path="-D, --deny" type="string">
+  Deny (enable) a rule or category (emit an error).
+  
+  ```bash
+  # Enable suspicious and pedantic categories
+  oxlint -D suspicious -D pedantic src/
+  
+  # Enable all rules except specific ones
+  oxlint -D all -A no-debugger src/
+  ```
+</ParamField>
+
+### Fix Options
+
+<ParamField path="--fix" type="flag">
+  Automatically fix as many issues as possible.
+  
+  Only safe fixes are applied. Unfixed issues are still reported.
+  
+  ```bash
+  oxlint --fix src/
+  ```
+</ParamField>
+
+<ParamField path="--fix-suggestions" type="flag">
+  Apply auto-fixable suggestions.
+  
+  **Warning**: May change program behavior.
+  
+  ```bash
+  oxlint --fix-suggestions src/
+  ```
+</ParamField>
+
+<ParamField path="--fix-dangerously" type="flag">
+  Apply dangerous fixes and suggestions.
+  
+  **Warning**: May significantly change program behavior. Review changes carefully.
+  
+  ```bash
+  oxlint --fix-dangerously src/
+  ```
+</ParamField>
+
+### Plugin Options
+
+Plugins extend oxlint with additional rules. Some plugins are enabled by default.
+
+#### Enabled by Default
+
+- `oxc` - Oxc-specific rules
+- `typescript` - TypeScript rules
+- `unicorn` - Unicorn plugin rules
+
+<ParamField path="--disable-oxc-plugin" type="flag">
+  Disable the oxc plugin (enabled by default).
+  
+  ```bash
+  oxlint --disable-oxc-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--disable-typescript-plugin" type="flag">
+  Disable TypeScript plugin (enabled by default).
+  
+  ```bash
+  oxlint --disable-typescript-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--disable-unicorn-plugin" type="flag">
+  Disable unicorn plugin (enabled by default).
+  
+  ```bash
+  oxlint --disable-unicorn-plugin src/
+  ```
+</ParamField>
+
+#### Optional Plugins
+
+<ParamField path="--import-plugin" type="flag">
+  Enable import plugin to detect ESM problems.
+  
+  Use with `--tsconfig` if your project uses a non-standard tsconfig name.
+  
+  ```bash
+  oxlint --import-plugin --tsconfig ./tsconfig.json src/
+  ```
+</ParamField>
+
+<ParamField path="--react-plugin" type="flag">
+  Enable React plugin for React-specific rules.
+  
+  ```bash
+  oxlint --react-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--jsx-a11y-plugin" type="flag">
+  Enable JSX accessibility plugin to detect accessibility issues.
+  
+  ```bash
+  oxlint --jsx-a11y-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--nextjs-plugin" type="flag">
+  Enable Next.js plugin for Next.js-specific rules.
+  
+  ```bash
+  oxlint --nextjs-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--react-perf-plugin" type="flag">
+  Enable React performance plugin to detect rendering performance issues.
+  
+  ```bash
+  oxlint --react-perf-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--jsdoc-plugin" type="flag">
+  Enable JSDoc plugin to detect JSDoc problems.
+  
+  ```bash
+  oxlint --jsdoc-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--jest-plugin" type="flag">
+  Enable Jest plugin for Jest test rules.
+  
+  ```bash
+  oxlint --jest-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--vitest-plugin" type="flag">
+  Enable Vitest plugin for Vitest test rules.
+  
+  ```bash
+  oxlint --vitest-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--promise-plugin" type="flag">
+  Enable promise plugin to detect promise usage issues.
+  
+  ```bash
+  oxlint --promise-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--node-plugin" type="flag">
+  Enable Node.js plugin for Node.js-specific rules.
+  
+  ```bash
+  oxlint --node-plugin src/
+  ```
+</ParamField>
+
+<ParamField path="--vue-plugin" type="flag">
+  Enable Vue plugin for Vue.js-specific rules.
+  
+  ```bash
+  oxlint --vue-plugin src/
+  ```
+</ParamField>
+
+### Type Checking
+
+<ParamField path="--type-aware" type="flag">
+  Enable rules that require type information.
+  
+  Requires a valid TypeScript configuration.
+  
+  ```bash
+  oxlint --type-aware src/
+  ```
+</ParamField>
+
+<ParamField path="--type-check" type="flag">
+  Enable experimental type checking (includes TypeScript compiler diagnostics).
+  
+  ```bash
+  oxlint --type-check src/
+  ```
+</ParamField>
+
+### Warning Options
+
+<ParamField path="--quiet" type="flag">
+  Disable reporting warnings, only report errors.
+  
+  ```bash
+  oxlint --quiet src/
+  ```
+</ParamField>
+
+<ParamField path="--deny-warnings" type="flag">
+  Ensure warnings produce a non-zero exit code.
+  
+  Useful in CI/CD pipelines to fail builds on warnings.
+  
+  ```bash
+  oxlint --deny-warnings src/
+  ```
+</ParamField>
+
+<ParamField path="--max-warnings" type="number">
+  Specify maximum number of warnings allowed.
+  
+  Exit with error status if warning count exceeds this threshold.
+  
+  ```bash
+  oxlint --max-warnings 10 src/
+  ```
+</ParamField>
+
+### Output Options
+
+<ParamField path="-f, --format" type="string" default="default">
+  Specify the output format.
+  
+  Available formats:
+  - `default` - Human-readable format (auto-detects GitHub Actions)
+  - `stylish` - Stylized output format
+  - `json` - JSON format for programmatic parsing
+  - `unix` - Unix-style output
+  - `checkstyle` - Checkstyle XML format
+  - `github` - GitHub Actions format
+  - `gitlab` - GitLab format
+  - `junit` - JUnit XML format
+  
+  When running in GitHub Actions, automatically uses `github` format.
+  
+  ```bash
+  oxlint --format json src/ > results.json
+  ```
+</ParamField>
+
+<ParamField path="--silent" type="flag">
+  Do not display any diagnostics.
+  
+  ```bash
+  oxlint --silent src/
+  ```
+</ParamField>
+
+### Ignore Options
+
+<ParamField path="--ignore-path" type="path" default=".eslintignore">
+  Specify the file to use as your ignore file.
+  
+  ```bash
+  oxlint --ignore-path .gitignore src/
+  ```
+</ParamField>
+
+<ParamField path="--ignore-pattern" type="string">
+  Specify patterns of files to ignore (in addition to those in ignore file).
+  
+  Can be specified multiple times. Uses same syntax as `.eslintignore` and `.gitignore`.
+  Quote patterns to avoid shell interpretation.
+  
+  ```bash
+  oxlint --ignore-pattern '**/*.test.js' --ignore-pattern '**/fixtures/*' src/
+  ```
+</ParamField>
+
+<ParamField path="--no-ignore" type="flag">
+  Disable excluding files from `.eslintignore` files, `--ignore-path`, and `--ignore-pattern` flags.
+  
+  ```bash
+  oxlint --no-ignore src/
+  ```
+</ParamField>
+
+### Inline Configuration Comments
+
+<ParamField path="--report-unused-disable-directives" type="flag">
+  Report directive comments like `// oxlint-disable-line` when no errors would have been reported on that line.
+  
+  Helps keep codebase clean of unnecessary disable directives.
+  
+  ```bash
+  oxlint --report-unused-disable-directives src/
+  ```
+</ParamField>
+
+<ParamField path="--report-unused-disable-directives-severity" type="string">
+  Same as `--report-unused-disable-directives`, but specify severity level.
+  
+  Options: `allow`, `warn`, `deny`, `error`
+  
+  Only one of these options can be used at a time.
+  
+  ```bash
+  oxlint --report-unused-disable-directives-severity=warn src/
+  ```
+</ParamField>
+
+### Performance Options
+
+<ParamField path="--threads" type="number">
+  Number of threads to use for linting.
+  
+  Set to 1 to use only 1 CPU core. By default, uses all available CPU cores.
+  
+  ```bash
+  oxlint --threads 4 src/
+  ```
+</ParamField>
+
+### Miscellaneous
+
+<ParamField path="--print-config" type="flag">
+  Output the configuration that would be used for linting.
+  
+  No linting is performed when this flag is present.
+  
+  ```bash
+  oxlint --print-config
+  ```
+</ParamField>
+
+## Exit Codes
+
+oxlint uses the following exit codes:
+
+| Exit Code | Meaning |
+|-----------|--------|
+| 0 | Success - no linting errors found |
+| 1 | Failure - linting errors found, invalid configuration, or other errors |
+
+Exit codes in detail:
+
+- **0 (Success)**
+  - No errors found
+  - `--rules` or `--print-config` executed successfully
+  - `--init` executed successfully
+  - No files found (currently returns success)
+
+- **1 (Failure)**
+  - Linting errors found
+  - Configuration file invalid
+  - TypeScript configuration invalid
+  - `--max-warnings` threshold exceeded
+  - `--deny-warnings` used and warnings found
+  - Invalid command-line options
+  - JavaScript plugin workspace setup failed
+
+## Configuration File
+
+oxlint supports configuration files compatible with ESLint v8 format.
+
+### Example `.oxlintrc.json`
+
+```json
+{
+  "rules": {
+    "no-debugger": "error",
+    "no-console": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "plugins": ["react", "jsx-a11y"]
+}
+```
+
+## Integration Examples
+
+### CI/CD Integration
+
+#### GitHub Actions
+
+```yaml
+name: Lint
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm install
+      - run: npx oxlint --deny-warnings src/
+```
+
+#### GitLab CI
+
+```yaml
+lint:
+  script:
+    - npm install
+    - npx oxlint --format gitlab --deny-warnings src/
+```
+
+### Pre-commit Hook
+
+#### Using Husky
+
+```json
+// package.json
+{
+  "scripts": {
+    "prepare": "husky install"
+  }
+}
+```
+
+```bash
+# .husky/pre-commit
+npx oxlint --fix
+```
+
+#### Using lint-staged
+
+```json
+// package.json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "oxlint --fix"
+  }
+}
+```
+
+### NPM Scripts
+
+```json
+{
+  "scripts": {
+    "lint": "oxlint src/",
+    "lint:fix": "oxlint --fix src/",
+    "lint:ci": "oxlint --deny-warnings --format json src/ > lint-results.json"
+  }
+}
+```
+
+## Performance Tips
+
+1. **Use Multiple Threads**: oxlint automatically uses all available CPU cores. For large projects, this provides significant speedup.
+
+2. **Disable Unused Plugins**: Only enable plugins you need. Disabling unused default plugins can improve performance:
+   ```bash
+   oxlint --disable-unicorn-plugin src/
+   ```
+
+3. **Ignore Patterns**: Use `--ignore-pattern` to skip files that don't need linting:
+   ```bash
+   oxlint --ignore-pattern '**/*.test.js' src/
+   ```
+
+4. **Targeted Linting**: In CI/CD, lint only changed files:
+   ```bash
+   git diff --name-only --diff-filter=ACMR main... | grep '\.\(js\|ts\|jsx\|tsx\)$' | xargs oxlint
+   ```
+
+5. **Type-Aware Rules**: Only enable `--type-aware` when necessary, as it requires TypeScript type checking which adds overhead.
+
+## Common Use Cases
+
+### Lint with Auto-fix
+
+```bash
+oxlint --fix src/
+```
+
+### Strict Linting for CI
+
+```bash
+oxlint --deny-warnings --max-warnings 0 -D all -A nursery src/
+```
+
+### React Project
+
+```bash
+oxlint --react-plugin --jsx-a11y-plugin src/
+```
+
+### TypeScript Project with Type Checking
+
+```bash
+oxlint --type-aware --tsconfig ./tsconfig.json src/
+```
+
+### Generate JSON Report
+
+```bash
+oxlint --format json src/ > lint-report.json
+```
+
+### Progressive Adoption
+
+```bash
+# Start with errors only, allow all warnings
+oxlint -A all -D correctness src/
+
+# Gradually enable more categories
+oxlint -A all -D correctness -D suspicious src/
+```
+
+## Inline Directives
+
+Disable rules using comments in your code:
+
+```javascript
+// Disable for entire file
+/* oxlint-disable */
+
+// Disable specific rule for file
+/* oxlint-disable no-debugger */
+
+// Disable for next line
+// oxlint-disable-next-line
+console.log('debug');
+
+// Disable specific rule for next line
+// oxlint-disable-next-line no-console
+console.log('debug');
+
+// Disable for current line
+console.log('debug'); // oxlint-disable-line
+
+// Re-enable rules
+/* oxlint-enable */
+```
+
+## Troubleshooting
+
+### No Files Found
+
+If oxlint reports no files found:
+
+1. Check ignore patterns: `oxlint --print-config`
+2. Verify paths are correct
+3. Use `--no-ignore` to temporarily disable ignore files
+
+### Performance Issues
+
+1. Check thread usage: `oxlint --threads 1` to test single-threaded
+2. Profile with `--print-config` to see enabled rules
+3. Disable type-aware rules if not needed
+
+### Configuration Not Loading
+
+1. Ensure config file is in correct location
+2. Check file syntax: JSON must be valid
+3. Use `--config` to specify path explicitly
+4. Use `--print-config` to debug configuration
+
+## See Also
+
+- [Linter Configuration](/guide/configuration)
+- [Available Rules](/rules)
+- [Editor Integration](/guide/editor-integration)

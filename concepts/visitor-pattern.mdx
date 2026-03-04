@@ -1,0 +1,593 @@
+---
+title: Visitor Pattern
+description: Understanding AST traversal using the visitor pattern and procedural macro generation
+---
+
+# Visitor Pattern
+
+The visitor pattern is Oxc's primary mechanism for traversing and transforming Abstract Syntax Trees. It provides a type-safe, efficient way to process every node in an AST while maintaining clean separation between the data structure and operations performed on it.
+
+## What is the Visitor Pattern?
+
+The visitor pattern is a behavioral design pattern that lets you separate algorithms from the objects they operate on. In the context of AST processing:
+
+- **AST nodes** are the data structure (expressions, statements, declarations)
+- **Visitors** are the operations you want to perform (analysis, transformation, code generation)
+
+<Info>
+By separating the AST structure from operations, you can add new operations without modifying the AST types themselves.
+</Info>
+
+## Two Visitor Traits
+
+Oxc provides two visitor traits:
+
+<CardGroup cols={2}>
+  <Card title="Visit" icon="eye">
+    **Immutable traversal** for analysis
+    - Read-only access to AST nodes
+    - Perfect for linting and analysis
+    - Multiple visitors can run in parallel
+  </Card>
+  
+  <Card title="VisitMut" icon="pen-to-square">
+    **Mutable traversal** for transformation
+    - Read-write access to AST nodes
+    - Perfect for code transformation
+    - Can modify AST in-place
+  </Card>
+</CardGroup>
+
+## Basic Usage: Immutable Visiting
+
+Here's a simple visitor that counts different types of nodes:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_ast::ast::*;
+use oxc_ast_visit::{Visit, walk};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+// Define your visitor struct
+#[derive(Default, Debug)]
+struct NodeCounter {
+    functions: usize,
+    classes: usize,
+    variables: usize,
+}
+
+// Implement the Visit trait
+impl<'a> Visit<'a> for NodeCounter {
+    // Visit function declarations and expressions
+    fn visit_function(&mut self, func: &Function<'a>, flags: ScopeFlags) {
+        self.functions += 1;
+        // Continue traversing into the function body
+        walk::walk_function(self, func, flags);
+    }
+    
+    // Visit class declarations and expressions
+    fn visit_class(&mut self, class: &Class<'a>) {
+        self.classes += 1;
+        walk::walk_class(self, class);
+    }
+    
+    // Visit variable declarations
+    fn visit_variable_declaration(&mut self, decl: &VariableDeclaration<'a>) {
+        self.variables += decl.declarations.len();
+        walk::walk_variable_declaration(self, decl);
+    }
+}
+
+// Use the visitor
+let allocator = Allocator::default();
+let source_text = r#"
+    const x = 1;
+    function foo() {}
+    class Bar {}
+"#;
+
+let ret = Parser::new(&allocator, source_text, SourceType::default()).parse();
+let program = ret.program;
+
+let mut counter = NodeCounter::default();
+counter.visit_program(&program);
+
+println!("{:?}", counter);
+// Output: NodeCounter { functions: 1, classes: 1, variables: 1 }
+```
+
+<Note>
+The `walk::walk_*` functions continue the traversal. Without calling them, you won't visit child nodes.
+</Note>
+
+## Visit Trait Methods
+
+The `Visit` trait provides methods for every AST node type:
+
+```rust
+pub trait Visit<'a>: Sized {
+    // Control traversal
+    fn enter_node(&mut self, kind: AstKind<'a>) {}
+    fn leave_node(&mut self, kind: AstKind<'a>) {}
+    
+    fn enter_scope(&mut self, flags: ScopeFlags, scope_id: &Cell<Option<ScopeId>>) {}
+    fn leave_scope(&mut self) {}
+    
+    // Visit root
+    fn visit_program(&mut self, it: &Program<'a>) {
+        walk_program(self, it);
+    }
+    
+    // Visit expressions
+    fn visit_expression(&mut self, it: &Expression<'a>) {
+        walk_expression(self, it);
+    }
+    
+    fn visit_binary_expression(&mut self, it: &BinaryExpression<'a>) {
+        walk_binary_expression(self, it);
+    }
+    
+    fn visit_call_expression(&mut self, it: &CallExpression<'a>) {
+        walk_call_expression(self, it);
+    }
+    
+    // Visit statements
+    fn visit_statement(&mut self, it: &Statement<'a>) {
+        walk_statement(self, it);
+    }
+    
+    fn visit_if_statement(&mut self, it: &IfStatement<'a>) {
+        walk_if_statement(self, it);
+    }
+    
+    // Visit identifiers
+    fn visit_binding_identifier(&mut self, it: &BindingIdentifier<'a>) {
+        walk_binding_identifier(self, it);
+    }
+    
+    fn visit_identifier_reference(&mut self, it: &IdentifierReference<'a>) {
+        walk_identifier_reference(self, it);
+    }
+    
+    // ... hundreds more visit methods for every AST node type
+}
+```
+
+<Info>
+You only need to override the methods for node types you care about. The default implementations call the appropriate `walk` function.
+</Info>
+
+## Advanced Example: Finding Variable References
+
+This visitor finds all references to a specific variable:
+
+```rust
+use oxc_ast_visit::{Visit, walk};
+use oxc_span::GetSpan;
+
+struct VariableFinder<'a> {
+    target_name: &'a str,
+    references: Vec<Span>,
+}
+
+impl<'a> Visit<'a> for VariableFinder<'a> {
+    fn visit_identifier_reference(&mut self, ident: &IdentifierReference<'a>) {
+        if ident.name.as_str() == self.target_name {
+            self.references.push(ident.span);
+        }
+        walk::walk_identifier_reference(self, ident);
+    }
+}
+
+// Usage
+let mut finder = VariableFinder {
+    target_name: "foo",
+    references: Vec::new(),
+};
+finder.visit_program(&program);
+
+println!("Found 'foo' at {} locations:", finder.references.len());
+for span in finder.references {
+    println!("  - {:?}", span);
+}
+```
+
+## Mutable Visiting: Transformations
+
+For transformations, use `VisitMut` which provides mutable access:
+
+```rust
+use oxc_ast::ast::*;
+use oxc_ast_visit::{VisitMut, walk_mut};
+
+struct BooleanInverter;
+
+impl<'a> VisitMut<'a> for BooleanInverter {
+    fn visit_boolean_literal(&mut self, lit: &mut BooleanLiteral) {
+        // Invert boolean literals
+        lit.value = !lit.value;
+        walk_mut::walk_boolean_literal(self, lit);
+    }
+}
+
+// Usage
+let mut inverter = BooleanInverter;
+inverter.visit_program(&mut program);
+
+// All `true` becomes `false` and vice versa
+```
+
+<Warning>
+Mutable visitors modify the AST in-place. Make sure you understand the implications of your changes.
+</Warning>
+
+## Real-World Example: Linter Rule
+
+Here's how a linter rule might use the visitor pattern:
+
+```rust
+use oxc_ast::ast::*;
+use oxc_ast_visit::{Visit, walk};
+use oxc_diagnostics::OxcDiagnostic;
+use oxc_span::Span;
+
+struct NoConsoleRule {
+    diagnostics: Vec<OxcDiagnostic>,
+}
+
+impl<'a> Visit<'a> for NoConsoleRule {
+    fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
+        // Check if this is a console.* call
+        if let Expression::StaticMemberExpression(member) = &call.callee {
+            if let Expression::Identifier(ident) = &member.object {
+                if ident.name.as_str() == "console" {
+                    self.diagnostics.push(
+                        OxcDiagnostic::warn("Unexpected console statement")
+                            .with_label(call.span.label("console call here"))
+                    );
+                }
+            }
+        }
+        
+        walk::walk_call_expression(self, call);
+    }
+}
+
+// Usage
+let mut rule = NoConsoleRule { diagnostics: Vec::new() };
+rule.visit_program(&program);
+
+for diagnostic in rule.diagnostics {
+    println!("{:?}", diagnostic);
+}
+```
+
+## Enter/Leave Hooks
+
+Visitors can hook into node entry and exit:
+
+```rust
+struct ScopeTracker {
+    depth: usize,
+}
+
+impl<'a> Visit<'a> for ScopeTracker {
+    fn enter_scope(&mut self, flags: ScopeFlags, _scope_id: &Cell<Option<ScopeId>>) {
+        self.depth += 1;
+        println!("{}Entering scope with flags: {:?}", "  ".repeat(self.depth), flags);
+    }
+    
+    fn leave_scope(&mut self) {
+        println!("{}Leaving scope", "  ".repeat(self.depth));
+        self.depth -= 1;
+    }
+    
+    fn enter_node(&mut self, kind: AstKind<'a>) {
+        println!("{}Visiting: {:?}", "  ".repeat(self.depth), kind);
+    }
+}
+```
+
+This produces output like:
+
+```
+Entering scope with flags: Top
+  Visiting: VariableDeclaration
+  Entering scope with flags: Function
+    Visiting: FunctionDeclaration
+  Leaving scope
+Leaving scope
+```
+
+## Procedural Macro Generation
+
+The visitor traits are automatically generated from AST definitions using procedural macros:
+
+```rust
+// In oxc_ast/src/ast/js.rs:
+#[ast(visit)]  // This marker tells the macro to generate visitor methods
+pub struct BinaryExpression<'a> {
+    pub span: Span,
+    pub left: Expression<'a>,
+    pub operator: BinaryOperator,
+    pub right: Expression<'a>,
+}
+```
+
+The `#[ast(visit)]` attribute causes the `oxc_ast_tools` code generator to create:
+
+1. `visit_binary_expression` method in `Visit` trait
+2. `visit_mut_binary_expression` method in `VisitMut` trait
+3. `walk_binary_expression` function
+4. `walk_mut_binary_expression` function
+
+<Info>
+This ensures complete coverage of all AST nodes. When new nodes are added, visitor methods are automatically generated.
+</Info>
+
+## Walk Functions
+
+Each `visit_*` method has a corresponding `walk_*` function that handles the default traversal:
+
+```rust
+// From oxc_ast_visit/src/generated/visit.rs
+pub fn walk_binary_expression<'a, V: Visit<'a>>(visitor: &mut V, expr: &BinaryExpression<'a>) {
+    // Visit left operand
+    visitor.visit_expression(&expr.left);
+    // Visit right operand
+    visitor.visit_expression(&expr.right);
+}
+
+pub fn walk_if_statement<'a, V: Visit<'a>>(visitor: &mut V, stmt: &IfStatement<'a>) {
+    // Visit test condition
+    visitor.visit_expression(&stmt.test);
+    // Visit consequent branch
+    visitor.visit_statement(&stmt.consequent);
+    // Visit alternate branch if present
+    if let Some(alternate) = &stmt.alternate {
+        visitor.visit_statement(alternate);
+    }
+}
+```
+
+<Note>
+Always call the appropriate `walk_*` function unless you want to stop traversal at that node.
+</Note>
+
+## Selective Traversal
+
+You can control traversal by not calling `walk`:
+
+```rust
+impl<'a> Visit<'a> for MyVisitor {
+    fn visit_function(&mut self, func: &Function<'a>, flags: ScopeFlags) {
+        // Process the function but DON'T traverse into its body
+        self.function_names.push(func.id.as_ref().unwrap().name.clone());
+        // NOT calling walk::walk_function here!
+    }
+}
+```
+
+This is useful when you want to analyze function signatures without inspecting their implementations.
+
+## Combining with Semantic Analysis
+
+Visitors often need semantic information:
+
+```rust
+use oxc_semantic::{Semantic, SemanticBuilder};
+use oxc_syntax::symbol::SymbolFlags;
+
+struct UnusedVariableChecker<'a> {
+    semantic: &'a Semantic<'a>,
+    unused: Vec<String>,
+}
+
+impl<'a> Visit<'a> for UnusedVariableChecker<'a> {
+    fn visit_binding_identifier(&mut self, ident: &BindingIdentifier<'a>) {
+        if let Some(symbol_id) = ident.symbol_id.get() {
+            let references = self.semantic
+                .scoping()
+                .get_resolved_reference_ids(symbol_id);
+            
+            if references.is_empty() {
+                self.unused.push(ident.name.to_string());
+            }
+        }
+        walk::walk_binding_identifier(self, ident);
+    }
+}
+
+// Usage
+let semantic = SemanticBuilder::new().build(&program);
+let mut checker = UnusedVariableChecker {
+    semantic: &semantic.semantic,
+    unused: Vec::new(),
+};
+checker.visit_program(&program);
+
+println!("Unused variables: {:?}", checker.unused);
+```
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Zero Virtual Calls" icon="gauge-high">
+    Rust's monomorphization eliminates virtual dispatch overhead
+  </Card>
+  
+  <Card title="Cache Friendly" icon="memory">
+    Linear traversal of arena-allocated AST has excellent cache locality
+  </Card>
+  
+  <Card title="Selective Visiting" icon="filter">
+    Override only methods you need - other nodes are skipped efficiently
+  </Card>
+  
+  <Card title="Parallel Safe" icon="arrows-split-up-and-left">
+    Immutable visitors can run in parallel on the same AST
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+### Pattern 1: Collecting Information
+
+```rust
+struct InfoCollector {
+    data: Vec<SomeInfo>,
+}
+
+impl<'a> Visit<'a> for InfoCollector {
+    fn visit_some_node(&mut self, node: &SomeNode<'a>) {
+        self.data.push(extract_info(node));
+        walk::walk_some_node(self, node);
+    }
+}
+```
+
+### Pattern 2: Validation
+
+```rust
+struct Validator {
+    errors: Vec<OxcDiagnostic>,
+}
+
+impl<'a> Visit<'a> for Validator {
+    fn visit_some_node(&mut self, node: &SomeNode<'a>) {
+        if is_invalid(node) {
+            self.errors.push(create_diagnostic(node));
+        }
+        walk::walk_some_node(self, node);
+    }
+}
+```
+
+### Pattern 3: Transformation
+
+```rust
+struct Transformer<'a> {
+    allocator: &'a Allocator,
+}
+
+impl<'a> VisitMut<'a> for Transformer<'a> {
+    fn visit_some_node(&mut self, node: &mut SomeNode<'a>) {
+        // Transform the node
+        *node = create_new_node(self.allocator);
+        walk_mut::walk_some_node(self, node);
+    }
+}
+```
+
+### Pattern 4: Context Tracking
+
+```rust
+struct ContextTracker {
+    context_stack: Vec<Context>,
+}
+
+impl<'a> Visit<'a> for ContextTracker {
+    fn visit_function(&mut self, func: &Function<'a>, flags: ScopeFlags) {
+        self.context_stack.push(Context::Function);
+        walk::walk_function(self, func, flags);
+        self.context_stack.pop();
+    }
+    
+    fn visit_class(&mut self, class: &Class<'a>) {
+        self.context_stack.push(Context::Class);
+        walk::walk_class(self, class);
+        self.context_stack.pop();
+    }
+}
+```
+
+## Traverse vs Visit
+
+Oxc also provides `oxc_traverse` for more complex traversal needs:
+
+- **`oxc_ast_visit`**: Simple, read-only or in-place transformations
+- **`oxc_traverse`**: Advanced transformations with scope/symbol management
+
+<Info>
+For most use cases, `oxc_ast_visit` is sufficient. Use `oxc_traverse` when you need to modify scope chains or symbol tables during transformation.
+</Info>
+
+## Complete Example: Console Call Reporter
+
+Here's a complete example that finds and reports all `console.*` calls:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_ast::ast::*;
+use oxc_ast_visit::{Visit, walk};
+use oxc_parser::Parser;
+use oxc_span::{GetSpan, SourceType};
+use std::collections::HashMap;
+
+#[derive(Default)]
+struct ConsoleCallReporter {
+    calls: HashMap<String, Vec<Span>>,
+}
+
+impl<'a> Visit<'a> for ConsoleCallReporter {
+    fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
+        if let Expression::StaticMemberExpression(member) = &call.callee {
+            if let Expression::Identifier(ident) = &member.object {
+                if ident.name.as_str() == "console" {
+                    let method = member.property.name.as_str();
+                    self.calls
+                        .entry(method.to_string())
+                        .or_default()
+                        .push(call.span);
+                }
+            }
+        }
+        
+        walk::walk_call_expression(self, call);
+    }
+}
+
+fn main() {
+    let allocator = Allocator::default();
+    let source_text = r#"
+        console.log('hello');
+        console.warn('warning');
+        console.log('world');
+        console.error('error');
+    "#;
+    
+    let ret = Parser::new(&allocator, source_text, SourceType::default()).parse();
+    let program = ret.program;
+    
+    let mut reporter = ConsoleCallReporter::default();
+    reporter.visit_program(&program);
+    
+    for (method, spans) in reporter.calls {
+        println!("console.{} called {} times:", method, spans.len());
+        for span in spans {
+            println!("  - at {:?}", span);
+        }
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AST Structure" icon="sitemap" href="/concepts/ast">
+    Learn about the AST nodes you'll be visiting
+  </Card>
+  
+  <Card title="Semantic Analysis" icon="diagram-project" href="/concepts/semantic-analysis">
+    Learn how to combine visitors with semantic information
+  </Card>
+  
+  <Card title="Linter Guide" icon="shield-halved" href="/tools/linter">
+    See how linters use the visitor pattern
+  </Card>
+  
+  <Card title="Transformer Guide" icon="wand-magic-sparkles" href="/tools/transformer">
+    See how transformers use the visitor pattern
+  </Card>
+</CardGroup>

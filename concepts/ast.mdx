@@ -1,0 +1,356 @@
+---
+title: AST Structure
+description: Understanding Oxc's Abstract Syntax Tree design, node types, and how it differs from ESTree
+---
+
+# AST Structure
+
+Oxc's Abstract Syntax Tree (AST) is the core data structure representing JavaScript and TypeScript code in a structured, programmatic format. Understanding the AST is essential for working with Oxc's parser, transformer, linter, and other tools.
+
+## Overview
+
+The AST provides comprehensive node definitions that support the full spectrum of JavaScript and TypeScript syntax, including JSX. Unlike many JavaScript tools that use the [ESTree specification](https://github.com/estree/estree), Oxc takes a different approach focused on clarity and type safety.
+
+## Key Design Principles
+
+### Explicit Identifier Types
+
+One of the most important differences from ESTree is how Oxc handles identifiers. Instead of a generic `Identifier` node, Oxc provides three distinct types that align closely with the ECMAScript specification:
+
+<CardGroup cols={3}>
+  <Card title="BindingIdentifier" icon="code">
+    Used for variable declarations and bindings
+    ```javascript
+    const x = 1;  // 'x' is BindingIdentifier
+    function foo() {}  // 'foo' is BindingIdentifier
+    ```
+  </Card>
+  
+  <Card title="IdentifierReference" icon="link">
+    Used for variable references
+    ```javascript
+    const x = 1;
+    console.log(x);  // 'x' is IdentifierReference
+    ```
+  </Card>
+  
+  <Card title="IdentifierName" icon="tag">
+    Used for property names and labels
+    ```javascript
+    const obj = { foo: 1 };  // 'foo' is IdentifierName
+    label: break label;  // 'label' is IdentifierName
+    ```
+  </Card>
+</CardGroup>
+
+<Info>
+This distinction eliminates a major source of confusion in AST-based tools. With ESTree's generic `Identifier`, developers must constantly check context to understand what kind of identifier they're working with. Oxc's explicit types make this immediately clear.
+</Info>
+
+### Node Structure Example
+
+Here's how these identifier types are defined in Oxc:
+
+```rust
+/// `x` in `const x = 0;`
+/// Represents a binding identifier used to declare a variable, function, class, or object.
+pub struct BindingIdentifier<'a> {
+    pub node_id: Cell<NodeId>,
+    pub span: Span,
+    pub name: Ident<'a>,
+    /// Unique identifier for this binding.
+    /// Initialized during semantic analysis.
+    pub symbol_id: Cell<Option<SymbolId>>,
+}
+
+/// `x` inside `func` in `const x = 0; function func() { console.log(x); }`
+/// Represents an identifier reference to a variable, function, class, or object.
+pub struct IdentifierReference<'a> {
+    pub node_id: Cell<NodeId>,
+    pub span: Span,
+    pub name: Ident<'a>,
+    /// Reference ID linking to what this refers to.
+    /// Set during semantic analysis.
+    pub reference_id: Cell<Option<ReferenceId>>,
+}
+
+/// `foo` in `let foo = 1;`
+/// Fundamental syntactic structure for naming properties and labels.
+pub struct IdentifierName<'a> {
+    pub node_id: Cell<NodeId>,
+    pub span: Span,
+    pub name: Ident<'a>,
+}
+```
+
+<Note>
+Notice that `BindingIdentifier` has a `symbol_id` field, while `IdentifierReference` has a `reference_id` field. These are populated during [semantic analysis](/concepts/semantic-analysis) and link identifiers to their declarations and uses.
+</Note>
+
+### Specialized Literal Types
+
+Similarly, Oxc replaces ESTree's generic `Literal` node with specific types:
+
+- `BooleanLiteral` - `true` or `false`
+- `NumericLiteral` - `42`, `3.14`, `0xFF`
+- `BigIntLiteral` - `123n`
+- `StringLiteral` - `"hello"`
+- `RegExpLiteral` - `/pattern/flags`
+- `NullLiteral` - `null`
+- `TemplateLiteral` - `` `hello ${world}` ``
+
+This makes pattern matching more precise and reduces runtime type checks.
+
+### Precise Assignment Targets
+
+The `AssignmentExpression.left` field uses the specific `AssignmentTarget` type instead of a generic `Pattern`, making it clear what can appear on the left side of an assignment:
+
+```rust
+pub enum AssignmentTarget<'a> {
+    AssignmentTargetIdentifier(Box<'a, IdentifierReference<'a>>),
+    ComputedMemberExpression(Box<'a, ComputedMemberExpression<'a>>),
+    StaticMemberExpression(Box<'a, StaticMemberExpression<'a>>),
+    PrivateFieldExpression(Box<'a, PrivateFieldExpression<'a>>),
+    ArrayAssignmentTarget(Box<'a, ArrayAssignmentTarget<'a>>),
+    ObjectAssignmentTarget(Box<'a, ObjectAssignmentTarget<'a>>),
+}
+```
+
+## AST Node Anatomy
+
+Every AST node in Oxc includes:
+
+1. **Node ID**: A unique identifier for the node, used for efficient lookups
+2. **Span**: Source position information (start and end byte offsets)
+3. **Node-specific fields**: The data that defines this particular node type
+
+```rust
+pub struct Program<'a> {
+    pub node_id: Cell<NodeId>,       // Unique identifier
+    pub span: Span,                  // Source position
+    pub source_type: SourceType,     // JS/TS/JSX/TSX
+    pub source_text: &'a str,        // Original source code
+    pub comments: Vec<'a, Comment>,  // Parsed comments
+    pub hashbang: Option<Hashbang<'a>>,
+    pub directives: Vec<'a, Directive<'a>>,
+    pub body: Vec<'a, Statement<'a>>,
+    pub scope_id: Cell<Option<ScopeId>>,  // Root scope
+}
+```
+
+## Working with the AST
+
+### Parsing Code into an AST
+
+Here's how to parse JavaScript/TypeScript code into an AST:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::{Parser, ParseOptions};
+use oxc_span::SourceType;
+
+// Create an allocator for AST nodes
+let allocator = Allocator::default();
+
+// Source code to parse
+let source_text = "const x = 42;";
+let source_type = SourceType::default();  // JavaScript
+
+// Parse the code
+let ret = Parser::new(&allocator, source_text, source_type)
+    .with_options(ParseOptions::default())
+    .parse();
+
+let program = ret.program;
+
+// Check for errors
+if !ret.errors.is_empty() {
+    for error in ret.errors {
+        eprintln!("Parse error: {:?}", error);
+    }
+}
+```
+
+<Info>
+All AST nodes are allocated in the `Allocator` arena. This is key to Oxc's performance. See [Allocator documentation](/concepts/allocator) for details.
+</Info>
+
+### Inspecting AST Structure
+
+You can debug-print the AST to see its structure:
+
+```rust
+println!("AST: {:#?}", program);
+```
+
+For the code `const x = 42;`, you'll see something like:
+
+```
+Program {
+    node_id: Cell { value: NodeId(0) },
+    span: Span { start: 0, end: 13 },
+    source_type: SourceType(JavaScript),
+    directives: [],
+    hashbang: None,
+    body: [
+        VariableDeclaration {
+            span: Span { start: 0, end: 13 },
+            kind: Const,
+            declarations: [
+                VariableDeclarator {
+                    id: BindingIdentifier {
+                        name: "x",
+                        symbol_id: Cell { value: None },
+                    },
+                    init: Some(
+                        NumericLiteral {
+                            value: 42.0,
+                            raw: "42",
+                        },
+                    ),
+                },
+            ],
+        },
+    ],
+}
+```
+
+### Traversing the AST
+
+To systematically traverse the AST, use the [visitor pattern](/concepts/visitor-pattern):
+
+```rust
+use oxc_ast::ast::*;
+use oxc_ast_visit::{Visit, walk};
+
+struct MyVisitor {
+    variable_count: usize,
+}
+
+impl<'a> Visit<'a> for MyVisitor {
+    fn visit_variable_declaration(&mut self, decl: &VariableDeclaration<'a>) {
+        self.variable_count += decl.declarations.len();
+        // Continue traversing
+        walk::walk_variable_declaration(self, decl);
+    }
+}
+
+let mut visitor = MyVisitor { variable_count: 0 };
+visitor.visit_program(&program);
+println!("Found {} variables", visitor.variable_count);
+```
+
+## Expression and Statement Hierarchies
+
+Oxc's AST uses Rust enums to represent the different types of expressions and statements:
+
+```rust
+pub enum Expression<'a> {
+    BooleanLiteral(Box<'a, BooleanLiteral>),
+    NullLiteral(Box<'a, NullLiteral>),
+    NumericLiteral(Box<'a, NumericLiteral<'a>>),
+    StringLiteral(Box<'a, StringLiteral<'a>>),
+    Identifier(Box<'a, IdentifierReference<'a>>),
+    ArrayExpression(Box<'a, ArrayExpression<'a>>),
+    ObjectExpression(Box<'a, ObjectExpression<'a>>),
+    BinaryExpression(Box<'a, BinaryExpression<'a>>),
+    CallExpression(Box<'a, CallExpression<'a>>),
+    // ... many more variants
+}
+
+pub enum Statement<'a> {
+    BlockStatement(Box<'a, BlockStatement<'a>>),
+    BreakStatement(Box<'a, BreakStatement<'a>>),
+    ContinueStatement(Box<'a, ContinueStatement<'a>>),
+    ExpressionStatement(Box<'a, ExpressionStatement<'a>>),
+    IfStatement(Box<'a, IfStatement<'a>>),
+    ReturnStatement(Box<'a, ReturnStatement<'a>>),
+    VariableDeclaration(Box<'a, VariableDeclaration<'a>>),
+    // ... many more variants
+}
+```
+
+<Note>
+All variants are wrapped in `Box<'a, T>` where `'a` is the lifetime of the allocator. This allows the AST to reference nodes without copying.
+</Note>
+
+## Memory Management
+
+All AST nodes are allocated in an arena allocator and have the lifetime `'a` tied to that allocator:
+
+```rust
+let allocator = Allocator::default();
+// All AST nodes created from parsing will have lifetime 'a tied to allocator
+let program: Program<'a> = parser.parse().program;
+// When allocator is dropped, all AST memory is freed at once
+```
+
+<Warning>
+Do not try to keep AST nodes alive after the allocator is dropped. The lifetime system prevents this at compile time.
+</Warning>
+
+## Field Ordering
+
+Fields in AST nodes follow ECMAScript evaluation order. This ensures that when you traverse fields in declaration order, you're processing them in the same order JavaScript would execute them.
+
+For example, in a `ForStatement`:
+```rust
+pub struct ForStatement<'a> {
+    pub init: Option<ForStatementInit<'a>>,    // Evaluated first
+    pub test: Option<Expression<'a>>,          // Evaluated second
+    pub update: Option<Expression<'a>>,        // Evaluated third
+    pub body: Statement<'a>,                   // Evaluated last
+}
+```
+
+## Integration with Semantic Analysis
+
+The AST alone doesn't include semantic information like scope or symbol resolution. That's added by the [semantic analyzer](/concepts/semantic-analysis):
+
+```rust
+use oxc_semantic::SemanticBuilder;
+
+// Parse first
+let ret = Parser::new(&allocator, source_text, source_type).parse();
+let program = ret.program;
+
+// Then analyze
+let semantic = SemanticBuilder::new()
+    .with_check_syntax_error(true)
+    .build(&program);
+
+// Now BindingIdentifier.symbol_id and IdentifierReference.reference_id are populated
+```
+
+## Differences from ESTree
+
+Key differences between Oxc AST and ESTree:
+
+| Feature | ESTree | Oxc |
+|---------|--------|-----|
+| Identifiers | Generic `Identifier` | `BindingIdentifier`, `IdentifierReference`, `IdentifierName` |
+| Literals | Generic `Literal` | `BooleanLiteral`, `NumericLiteral`, `StringLiteral`, etc. |
+| Assignment targets | Generic `Pattern` | Specific `AssignmentTarget` enum |
+| Memory model | Reference counted | Arena allocated with lifetimes |
+| Node IDs | Not included | Every node has a `NodeId` |
+| Spans | Optional | Required on every node |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Allocator" icon="memory" href="/concepts/allocator">
+    Learn about arena allocation and memory management
+  </Card>
+  
+  <Card title="Visitor Pattern" icon="route" href="/concepts/visitor-pattern">
+    Learn how to traverse and transform AST nodes
+  </Card>
+  
+  <Card title="Semantic Analysis" icon="diagram-project" href="/concepts/semantic-analysis">
+    Learn about scope resolution and symbol tables
+  </Card>
+  
+  <Card title="Parser API" icon="book" href="/api/parser">
+    Explore the parser API documentation
+  </Card>
+</CardGroup>

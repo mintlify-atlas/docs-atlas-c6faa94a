@@ -1,0 +1,514 @@
+---
+title: "Parser API"
+description: "Parse JavaScript and TypeScript code into an AST using oxc-parser"
+icon: "code"
+---
+
+# oxc-parser
+
+A high-performance JavaScript and TypeScript parser for Node.js, powered by Rust. The parser generates an ESTree-compatible AST with support for the latest ECMAScript features.
+
+## Installation
+
+```bash
+npm install oxc-parser
+```
+
+```bash
+pnpm add oxc-parser
+```
+
+```bash
+yarn add oxc-parser
+```
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { parseSync } from 'oxc-parser';
+
+    const result = parseSync('test.ts', 'const x: number = 42;');
+
+    console.log(result.program); // ESTree AST
+    console.log(result.errors);  // Parse errors
+    console.log(result.comments); // Comments
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const { parseSync } = require('oxc-parser');
+
+    const result = parseSync('test.js', 'const x = 42;');
+
+    console.log(result.program); // ESTree AST
+    console.log(result.errors);  // Parse errors
+    console.log(result.comments); // Comments
+    ```
+  </Tab>
+</Tabs>
+
+## API Functions
+
+### parseSync
+
+**Synchronous parsing** on the current thread. This is the recommended function for most use cases as it avoids the overhead of spawning a thread.
+
+```typescript
+function parseSync(
+  filename: string,
+  sourceText: string,
+  options?: ParserOptions
+): ParseResult
+```
+
+<ParamField path="filename" type="string" required>
+  The name of the file being parsed. Used for error messages and to infer language type from extension (`.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.cjs`, `.mts`, `.cts`).
+</ParamField>
+
+<ParamField path="sourceText" type="string" required>
+  The JavaScript or TypeScript source code to parse.
+</ParamField>
+
+<ParamField path="options" type="ParserOptions">
+  Configuration options for the parser. See [ParserOptions](#parseroptions) for details.
+</ParamField>
+
+**Returns:** [ParseResult](#parseresult)
+
+#### Example
+
+```typescript
+import { parseSync } from 'oxc-parser';
+
+const result = parseSync('app.tsx', `
+  function App() {
+    return <div>Hello World</div>;
+  }
+`, {
+  lang: 'tsx',
+  sourceType: 'module'
+});
+
+if (result.errors.length > 0) {
+  console.error('Parse errors:', result.errors);
+} else {
+  console.log('AST:', result.program);
+}
+```
+
+### parse
+
+**Asynchronous parsing** on a separate thread. The Rust-side parsing happens on a separate thread, but deserialization to JavaScript objects happens on the main thread.
+
+<Note>
+  The majority of the workload (deserialization) cannot be parallelized. Generally `parseSync` is preferable as it doesn't have thread spawning overhead. Use worker threads with `parseSync` if you need to parallelize multiple files.
+</Note>
+
+```typescript
+function parse(
+  filename: string,
+  sourceText: string,
+  options?: ParserOptions
+): Promise<ParseResult>
+```
+
+<ParamField path="filename" type="string" required>
+  The name of the file being parsed.
+</ParamField>
+
+<ParamField path="sourceText" type="string" required>
+  The source code to parse.
+</ParamField>
+
+<ParamField path="options" type="ParserOptions">
+  Configuration options for the parser.
+</ParamField>
+
+**Returns:** `Promise<ParseResult>`
+
+#### Example
+
+```typescript
+import { parse } from 'oxc-parser';
+
+const result = await parse('module.js', `
+  import { foo } from './bar';
+  export const baz = foo();
+`);
+
+console.log('Imports:', result.module.staticImports);
+console.log('Exports:', result.module.staticExports);
+```
+
+## ParserOptions
+
+Configuration options for parsing behavior.
+
+<ParamField path="lang" type="'js' | 'jsx' | 'ts' | 'tsx' | 'dts'">
+  Explicitly specify the language to parse. If not provided, inferred from the filename extension.
+
+  - `'js'` - JavaScript
+  - `'jsx'` - JavaScript with JSX
+  - `'ts'` - TypeScript
+  - `'tsx'` - TypeScript with JSX
+  - `'dts'` - TypeScript declaration file
+</ParamField>
+
+<ParamField path="sourceType" type="'script' | 'module' | 'commonjs' | 'unambiguous'">
+  How to interpret the source code.
+
+  - `'script'` - Classic script (no imports/exports)
+  - `'module'` - ES module (supports import/export)
+  - `'commonjs'` - CommonJS module (supports top-level return)
+  - `'unambiguous'` - Auto-detect based on imports/exports
+</ParamField>
+
+<ParamField path="astType" type="'js' | 'ts'">
+  Controls whether TypeScript-specific properties are included in the AST.
+
+  - `'js'` - ESTree-compatible AST (default for JS/JSX files)
+  - `'ts'` - TS-ESTree-compatible AST with TypeScript properties (default for TS/TSX files)
+
+  Use `astType: 'js'` when parsing TypeScript if you want a cleaner AST without TypeScript-specific fields like `decorators`, `typeAnnotation`, etc.
+</ParamField>
+
+<ParamField path="range" type="boolean" default="false">
+  Include `range` property on AST nodes. The `range` is a `[number, number]` tuple indicating start/end offsets.
+
+  ```typescript
+  const result = parseSync('test.js', 'const x = 1;', { range: true });
+  console.log(result.program.body[0].range); // [0, 12]
+  ```
+</ParamField>
+
+<ParamField path="preserveParens" type="boolean" default="true">
+  Emit `ParenthesizedExpression` and `TSParenthesizedType` nodes in the AST.
+
+  When `true`, parenthesized expressions are represented by non-standard `ParenthesizedExpression` nodes. When `false`, parentheses are omitted.
+
+  ```typescript
+  // With preserveParens: true
+  parseSync('test.js', '(x)').program.body[0].expression.type
+  // => 'ParenthesizedExpression'
+
+  // With preserveParens: false
+  parseSync('test.js', '(x)', { preserveParens: false }).program.body[0].expression.type
+  // => 'Identifier'
+  ```
+</ParamField>
+
+<ParamField path="showSemanticErrors" type="boolean" default="false">
+  Perform an additional semantic analysis pass to detect errors that depend on symbols and scopes.
+
+  This adds a small performance overhead but catches errors like:
+  - Duplicate variable declarations
+  - Invalid break/continue statements
+  - Undeclared variables in strict mode
+
+  ```typescript
+  const code = 'let x; let x;'; // Duplicate declaration
+  const result = parseSync('test.js', code, { showSemanticErrors: true });
+  console.log(result.errors); // Will include semantic error
+  ```
+</ParamField>
+
+## ParseResult
+
+The result of parsing, containing the AST, module information, comments, and any errors.
+
+<ResponseField name="program" type="Program">
+  The root AST node conforming to the [ESTree specification](https://github.com/estree/estree).
+
+  ```typescript
+  interface Program {
+    type: 'Program';
+    sourceType: 'script' | 'module' | 'commonjs';
+    hashbang: Hashbang | null;
+    body: Statement[];
+    // ... other properties
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="module" type="EcmaScriptModule">
+  Information about ES module imports and exports.
+
+  ```typescript
+  interface EcmaScriptModule {
+    hasModuleSyntax: boolean;
+    staticImports: StaticImport[];
+    staticExports: StaticExport[];
+    dynamicImports: DynamicImport[];
+    importMetas: Span[];
+  }
+  ```
+
+  See [Module Information](#module-information) for details.
+</ResponseField>
+
+<ResponseField name="comments" type="Comment[]">
+  All comments found in the source code.
+
+  ```typescript
+  interface Comment {
+    type: 'Line' | 'Block';
+    value: string;
+    start: number;
+    end: number;
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="errors" type="OxcError[]">
+  Parse and semantic errors. The parser recovers from common syntax errors, so transformed code may still be available even with errors.
+
+  ```typescript
+  interface OxcError {
+    severity: 'Error' | 'Warning' | 'Advice';
+    message: string;
+    labels: ErrorLabel[];
+    helpMessage: string | null;
+    codeframe: string | null;
+  }
+  ```
+</ResponseField>
+
+## Module Information
+
+The `module` property provides detailed information about ES module syntax.
+
+### Static Imports
+
+```typescript
+import { parseSync } from 'oxc-parser';
+
+const code = `
+  import defaultExport from 'module';
+  import * as name from 'module';
+  import { export1, export2 as alias } from 'module';
+`;
+
+const { module } = parseSync('test.js', code);
+
+module.staticImports.forEach(imp => {
+  console.log('From:', imp.moduleRequest.value);
+  imp.entries.forEach(entry => {
+    console.log('  Import:', entry.importName);
+    console.log('  As:', entry.localName.value);
+  });
+});
+```
+
+### Static Exports
+
+```typescript
+const code = `
+  export { foo, bar as baz };
+  export * from 'module';
+  export default function() {}
+`;
+
+const { module } = parseSync('test.js', code);
+
+module.staticExports.forEach(exp => {
+  exp.entries.forEach(entry => {
+    console.log('Export name:', entry.exportName.name);
+    console.log('Local name:', entry.localName.name);
+  });
+});
+```
+
+### Dynamic Imports
+
+```typescript
+const code = `
+  const module = await import('./dynamic.js');
+  import('conditional.js').then(m => m.default());
+`;
+
+const { module } = parseSync('test.js', code);
+
+console.log('Dynamic imports:', module.dynamicImports.length);
+// Includes position information for each import()
+```
+
+## Advanced Usage
+
+### TypeScript Parsing
+
+```typescript
+import { parseSync } from 'oxc-parser';
+
+const code = `
+  interface User {
+    name: string;
+    age: number;
+  }
+
+  function greet(user: User): string {
+    return \`Hello, \${user.name}\`;
+  }
+`;
+
+const result = parseSync('user.ts', code, {
+  lang: 'ts',
+  sourceType: 'module'
+});
+
+// Access TypeScript-specific AST nodes
+const interfaceDecl = result.program.body[0];
+console.log(interfaceDecl.type); // 'TSInterfaceDeclaration'
+```
+
+### JSX/TSX Parsing
+
+```typescript
+const jsxCode = `
+  export function Button({ label, onClick }) {
+    return (
+      <button onClick={onClick} className="btn">
+        {label}
+      </button>
+    );
+  }
+`;
+
+const result = parseSync('Button.jsx', jsxCode, {
+  lang: 'jsx',
+  sourceType: 'module'
+});
+
+// JSX elements are parsed as JSXElement nodes
+```
+
+### Error Handling
+
+```typescript
+import { parseSync, type OxcError } from 'oxc-parser';
+
+const code = 'const x = ;'; // Syntax error
+
+const result = parseSync('test.js', code);
+
+if (result.errors.length > 0) {
+  result.errors.forEach((error: OxcError) => {
+    console.error(`[${error.severity}] ${error.message}`);
+    
+    if (error.codeframe) {
+      console.error(error.codeframe);
+    }
+    
+    if (error.helpMessage) {
+      console.log('Help:', error.helpMessage);
+    }
+  });
+}
+```
+
+### Working with Comments
+
+```typescript
+const code = `
+  // Line comment
+  /* Block comment */
+  const x = 1;
+`;
+
+const result = parseSync('test.js', code);
+
+result.comments.forEach(comment => {
+  console.log(`${comment.type} comment at ${comment.start}-${comment.end}:`);
+  console.log(comment.value);
+});
+```
+
+### AST Visitor Pattern
+
+```typescript
+import { parseSync, Visitor, type VisitorObject } from 'oxc-parser';
+
+const code = `
+  function foo() {
+    console.log('bar');
+  }
+  const x = 42;
+`;
+
+const result = parseSync('test.js', code);
+
+// Define visitor for AST traversal
+const visitorObject: VisitorObject = {
+  FunctionDeclaration(node) {
+    console.log('Found function:', node.id?.name);
+  },
+  VariableDeclaration(node) {
+    console.log('Found variable(s):', node.declarations.length);
+  }
+};
+
+const visitor = new Visitor(visitorObject);
+visitor.visit(result.program);
+```
+
+## Performance Tips
+
+<Card title="Use parseSync for Single Files" icon="bolt">
+  The synchronous API avoids thread spawning overhead and is faster for parsing individual files.
+</Card>
+
+<Card title="Disable Unused Features" icon="toggle-off">
+  Set `preserveParens: false` and avoid `showSemanticErrors` unless needed to improve performance.
+</Card>
+
+<Card title="Parallelize with Worker Threads" icon="arrows-split">
+  For parsing multiple files, use Node.js worker threads with `parseSync` instead of the async `parse` function.
+  
+  ```typescript
+  import { Worker } from 'worker_threads';
+  
+  // In worker:
+  // parseSync(filename, source)
+  ```
+</Card>
+
+<Card title="Reuse AST" icon="recycle">
+  The parser is very fast. Caching the AST is often unnecessary unless you're parsing the same file repeatedly.
+</Card>
+
+## Type Definitions
+
+The package includes full TypeScript definitions. Import types as needed:
+
+```typescript
+import type {
+  ParseResult,
+  ParserOptions,
+  Program,
+  Statement,
+  Expression,
+  Comment,
+  OxcError,
+  EcmaScriptModule
+} from 'oxc-parser';
+```
+
+For complete AST type definitions, see [@oxc-project/types](https://www.npmjs.com/package/@oxc-project/types).
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Transformer API" icon="wand-magic-sparkles" href="/api/transform">
+    Transform JavaScript/TypeScript with Babel-like functionality
+  </Card>
+  <Card title="Minifier API" icon="compress" href="/api/minify">
+    Minify JavaScript for production
+  </Card>
+  <Card title="Parser Tool" icon="book" href="/tools/parser">
+    Learn more about the Oxc parser
+  </Card>
+  <Card title="AST Concepts" icon="diagram-project" href="/concepts/ast">
+    Understanding Abstract Syntax Trees
+  </Card>
+</CardGroup>

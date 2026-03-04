@@ -1,0 +1,310 @@
+---
+title: oxc_parser
+description: JavaScript and TypeScript parser API reference
+---
+
+Oxc's parser provides high-performance parsing of JavaScript and TypeScript source code into an Abstract Syntax Tree (AST).
+
+## Features
+
+- Full support for the latest stable ECMAScript syntax
+- TypeScript support (including TSX)
+- JSX and TSX parsing
+- Stage 3 Decorators
+- Recoverable error handling
+- Memory-efficient arena allocation
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxc_parser = "0.116.0"
+oxc_allocator = "0.116.0"
+oxc_span = "0.116.0"
+oxc_ast = "0.116.0"
+```
+
+## Basic Usage
+
+The parser has a minimal API with three inputs and one return value:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source_text = "const x = 1 + 2;";
+let source_type = SourceType::mjs(); // or .ts(), .tsx(), etc.
+
+let parser_return = Parser::new(&allocator, source_text, source_type).parse();
+
+if parser_return.errors.is_empty() {
+    println!("Parsed successfully!");
+    println!("Program has {} statements", parser_return.program.body.len());
+}
+```
+
+## Core Types
+
+### Parser
+
+<ParamField path="Parser" type="struct">
+  Main parser struct. Create with `Parser::new()` and call `.parse()` to get results.
+</ParamField>
+
+**Constructor:**
+
+```rust
+pub fn new(
+    allocator: &'a Allocator,
+    source_text: &'a str,
+    source_type: SourceType
+) -> Self
+```
+
+<ParamField path="allocator" type="&'a Allocator" required>
+  Memory arena for allocating AST nodes. Use `Allocator::default()`.
+</ParamField>
+
+<ParamField path="source_text" type="&'a str" required>
+  Source code to parse
+</ParamField>
+
+<ParamField path="source_type" type="SourceType" required>
+  Language and module type (JavaScript/TypeScript, Script/Module, JSX support)
+</ParamField>
+
+### ParserReturn
+
+<ParamField path="ParserReturn" type="struct">
+  Return value from `Parser::parse()` containing the AST and diagnostics.
+</ParamField>
+
+**Fields:**
+
+<ParamField path="program" type="Program<'a>">
+  The parsed AST. Always present, even if there are errors (will be empty on panic).
+</ParamField>
+
+<ParamField path="errors" type="Vec<OxcDiagnostic>">
+  Syntax errors encountered during parsing. Empty if parsing succeeded.
+</ParamField>
+
+<ParamField path="module_record" type="ModuleRecord<'a>">
+  Module import/export information. See [ECMAScript Module Records](https://tc39.es/ecma262/#sec-abstract-module-records).
+</ParamField>
+
+<ParamField path="tokens" type="Vec<Token>">
+  Lexed tokens in source order. Only populated when tokens are enabled in `ParserConfig`.
+</ParamField>
+
+<ParamField path="panicked" type="bool">
+  Whether the parser terminated early due to an unrecoverable error.
+</ParamField>
+
+### ParseOptions
+
+Configure parser behavior:
+
+```rust
+let options = ParseOptions {
+    parse_regular_expression: true,
+    allow_return_outside_function: false,
+    preserve_parens: true,
+    ..Default::default()
+};
+
+let parser = Parser::new(&allocator, source_text, source_type)
+    .with_options(options);
+```
+
+<ParamField path="parse_regular_expression" type="bool" default="false">
+  Whether to parse regular expression literals. Requires the `regular_expression` feature.
+</ParamField>
+
+<ParamField path="allow_return_outside_function" type="bool" default="false">
+  Allow `return` statements at the top level.
+</ParamField>
+
+<ParamField path="preserve_parens" type="bool" default="true">
+  Emit `ParenthesizedExpression` nodes in the AST for parenthesized expressions.
+</ParamField>
+
+<ParamField path="allow_v8_intrinsics" type="bool" default="false">
+  Allow V8 runtime calls like `%DebugPrint()` in the AST.
+</ParamField>
+
+## Examples
+
+### Parsing TypeScript
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source = "const x: number = 42;";
+let source_type = SourceType::ts();
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+assert!(ret.errors.is_empty());
+```
+
+### Parsing JSX/TSX
+
+```rust
+let allocator = Allocator::default();
+let source = "const App = () => <div>Hello</div>;";
+let source_type = SourceType::tsx();
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+assert!(ret.errors.is_empty());
+```
+
+### Parsing a Single Expression
+
+```rust
+use oxc_ast::ast::Expression;
+
+let allocator = Allocator::default();
+let source = "1 + 2";
+let source_type = SourceType::default();
+
+let expr: Result<Expression, _> = Parser::new(&allocator, source, source_type)
+    .parse_expression();
+
+assert!(expr.is_ok());
+```
+
+### Handling Errors
+
+```rust
+let allocator = Allocator::default();
+let source = "const x = ;";
+let source_type = SourceType::default();
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+
+if !ret.errors.is_empty() {
+    for error in ret.errors {
+        let error = error.with_source_code(source.to_string());
+        eprintln!("{error:?}");
+    }
+}
+```
+
+### With Regular Expression Parsing
+
+```rust
+use oxc_parser::ParseOptions;
+
+let allocator = Allocator::default();
+let source = "const regex = /test/gi;";
+let source_type = SourceType::default();
+
+let options = ParseOptions {
+    parse_regular_expression: true,
+    ..Default::default()
+};
+
+let ret = Parser::new(&allocator, source, source_type)
+    .with_options(options)
+    .parse();
+```
+
+## Source Types
+
+The `SourceType` determines how code is parsed:
+
+```rust
+use oxc_span::SourceType;
+
+// JavaScript
+let js = SourceType::default();
+let js_module = SourceType::mjs();
+let js_script = SourceType::cjs();
+
+// TypeScript
+let ts = SourceType::ts();
+let dts = SourceType::d_ts();
+
+// JSX/TSX
+let jsx = SourceType::jsx();
+let tsx = SourceType::tsx();
+
+// From file path
+use std::path::Path;
+let source_type = SourceType::from_path(Path::new("file.ts")).unwrap();
+```
+
+## Performance
+
+The parser is optimized for speed:
+
+- **Arena allocation**: All AST nodes are allocated in a bump allocator for fast allocation and deallocation
+- **Compact spans**: Uses `u32` offsets instead of `usize` (max file size: 4 GiB)
+- **Deferred checks**: Complex syntax errors and scope resolution are handled by the semantic analyzer
+- **Zero-copy strings**: String literals reference the source text directly
+
+<Note>
+Due to `u32` span offsets, the parser cannot handle files larger than 4 GiB. This is not a practical limitation for JavaScript/TypeScript files.
+</Note>
+
+## AST Structure
+
+The parsed AST follows the [ESTree specification](https://github.com/estree/estree) with TypeScript extensions. All AST node types are defined in the [`oxc_ast`](https://docs.rs/oxc_ast) crate.
+
+```rust
+use oxc_ast::ast::*;
+use oxc_ast::AstKind;
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+
+// Access the program
+let program: Program = ret.program;
+
+// Iterate over statements
+for stmt in &program.body {
+    // Each statement is a Statement enum
+}
+```
+
+## Visiting the AST
+
+See the [`oxc_ast_visit`](https://docs.rs/oxc_ast_visit) crate for AST traversal:
+
+```rust
+use oxc_ast_visit::Visit;
+
+struct MyVisitor;
+
+impl<'a> Visit<'a> for MyVisitor {
+    fn enter_identifier_reference(&mut self, node: &IdentifierReference) {
+        println!("Found identifier: {}", node.name);
+    }
+}
+```
+
+## Feature Flags
+
+<ParamField path="regular_expression" type="feature">
+  Enable regular expression parsing. Adds `oxc_regular_expression` dependency.
+</ParamField>
+
+<ParamField path="benchmarking" type="feature">
+  Expose internal lexer for benchmarking purposes.
+</ParamField>
+
+## Related
+
+- [oxc_semantic](/api/rust/semantic) - Semantic analysis after parsing
+- [oxc_ast](https://docs.rs/oxc_ast) - AST node definitions
+- [Core Concepts: Parsing](/learn/parser_in_rust) - Architecture overview
+
+## API Documentation
+
+For complete API documentation, see [docs.rs/oxc_parser](https://docs.rs/oxc_parser).

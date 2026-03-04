@@ -1,0 +1,576 @@
+---
+title: "Linter (oxlint)"
+description: "High-performance ESLint-compatible linter for JavaScript and TypeScript"
+icon: "check-circle"
+---
+
+## Overview
+
+Oxlint is a production-ready linter that catches mistakes in your JavaScript and TypeScript code. It's designed to be **50-100x faster** than ESLint while maintaining compatibility with ESLint's configuration format and rules.
+
+<CardGroup cols={2}>
+  <Card title="Lightning Fast" icon="bolt">
+    Lints 4800+ files in under 1 second. Built for monorepos and large codebases.
+  </Card>
+  <Card title="ESLint Compatible" icon="code-compare">
+    Drop-in replacement supporting popular ESLint plugins and configurations.
+  </Card>
+  <Card title="200+ Rules" icon="list-check">
+    Comprehensive rule coverage including TypeScript, React, and more.
+  </Card>
+  <Card title="Auto-fixing" icon="wrench">
+    Automatically fix many issues with `--fix` flag.
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+### Run without installation
+
+```bash
+npx oxlint@latest
+```
+
+Oxlint will automatically discover and lint all JavaScript/TypeScript files in your project.
+
+### Install locally
+
+<CodeGroup>
+```bash npm
+npm install -D oxlint
+```
+
+```bash yarn
+yarn add -D oxlint
+```
+
+```bash pnpm
+pnpm add -D oxlint
+```
+</CodeGroup>
+
+Then add to your `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "lint": "oxlint"
+  }
+}
+```
+
+## CLI Usage
+
+### Basic Commands
+
+```bash
+# Lint current directory
+oxlint
+
+# Lint specific files or directories
+oxlint src/ lib/ index.js
+
+# Auto-fix issues
+oxlint --fix
+
+# Check with specific configuration
+oxlint -c .oxlintrc.json
+```
+
+### CLI Options
+
+<Tabs>
+  <Tab title="Basic Options">
+    | Flag | Description |
+    |------|-------------|
+    | `-c, --config <PATH>` | Path to configuration file (`.oxlintrc.json`, `.oxlintrc.jsonc`, or `oxlint.config.ts`) |
+    | `--init` | Initialize oxlint configuration with default values |
+    | `--tsconfig <PATH>` | Path to TypeScript config for import plugin and path aliases |
+  </Tab>
+  
+  <Tab title="Rules & Filters">
+    | Flag | Description |
+    |------|-------------|
+    | `-A, --allow <NAME>` | Allow/suppress a rule or category |
+    | `-W, --warn <NAME>` | Warn on a rule or category |
+    | `-D, --deny <NAME>` | Deny/error on a rule or category |
+    | `--rules` | List all available rules |
+    
+    **Rule Categories:**
+    - `correctness` - Code that is outright wrong or useless (default)
+    - `suspicious` - Code that is most likely wrong or useless
+    - `pedantic` - Strict lints with occasional false positives
+    - `perf` - Performance improvements
+    - `style` - Idiomatic code style
+    - `restriction` - Prevent use of language/library features
+    - `nursery` - New lints under development
+    - `all` - All categories except nursery
+  </Tab>
+  
+  <Tab title="Fixing">
+    | Flag | Description |
+    |------|-------------|
+    | `--fix` | Fix as many issues as possible |
+    | `--fix-suggestions` | Apply auto-fixable suggestions (may change behavior) |
+    | `--fix-dangerously` | Apply dangerous fixes and suggestions |
+  </Tab>
+  
+  <Tab title="Output">
+    | Flag | Description |
+    |------|-------------|
+    | `-f, --format <FORMAT>` | Output format: `default`, `stylish`, `json`, `unix`, `checkstyle`, `github`, `gitlab`, `junit` |
+    | `--quiet` | Disable warnings, only show errors |
+    | `--deny-warnings` | Ensure warnings produce non-zero exit code |
+    | `--max-warnings <INT>` | Exit with error if warnings exceed threshold |
+  </Tab>
+  
+  <Tab title="Plugins">
+    | Flag | Description |
+    |------|-------------|
+    | `--import-plugin` | Enable import plugin (ESM problems) |
+    | `--react-plugin` | Enable React plugin |
+    | `--jsdoc-plugin` | Enable JSDoc plugin |
+    | `--jest-plugin` | Enable Jest plugin |
+    | `--vitest-plugin` | Enable Vitest plugin |
+    | `--jsx-a11y-plugin` | Enable JSX accessibility plugin |
+    | `--nextjs-plugin` | Enable Next.js plugin |
+    | `--react-perf-plugin` | Enable React performance plugin |
+    | `--promise-plugin` | Enable promise plugin |
+    | `--node-plugin` | Enable Node.js plugin |
+    | `--vue-plugin` | Enable Vue plugin |
+    | `--disable-typescript-plugin` | Disable TypeScript plugin (on by default) |
+    | `--disable-unicorn-plugin` | Disable unicorn plugin (on by default) |
+    | `--disable-oxc-plugin` | Disable oxc unique rules (on by default) |
+  </Tab>
+  
+  <Tab title="Advanced">
+    | Flag | Description |
+    |------|-------------|
+    | `--threads <NUM>` | Number of threads to use |
+    | `--type-aware` | Enable rules requiring type information |
+    | `--type-check` | Enable experimental TypeScript compiler diagnostics |
+    | `--disable-nested-config` | Disable automatic loading of nested configs |
+    | `--lsp` | Start language server protocol server |
+    | `--report-unused-disable-directives` | Report when disable directives have no effect |
+  </Tab>
+</Tabs>
+
+### Examples
+
+```bash
+# Deny all warnings and errors in the correctness category
+oxlint -D correctness
+
+# Allow no-debugger and deny no-console
+oxlint -A no-debugger -D no-console
+
+# Deny all rules, then allow specific ones
+oxlint -D all -A no-unused-vars -A no-console
+
+# Lint with type-aware rules
+oxlint --type-aware --tsconfig ./tsconfig.json
+
+# Format output for GitHub Actions
+oxlint --format github
+
+# Lint with React and Jest plugins
+oxlint --react-plugin --jest-plugin
+```
+
+## Configuration
+
+### Configuration File
+
+Create `.oxlintrc.json` in your project root:
+
+```json .oxlintrc.json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "react",
+    "unicorn",
+    "import",
+    "jsdoc"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "error"
+  },
+  "rules": {
+    "no-console": "error",
+    "no-debugger": "error",
+    "prefer-const": ["error", { "destructuring": "all" }],
+    "typescript/no-explicit-any": "warn",
+    "react/jsx-key": "error"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.min.js"
+  ]
+}
+```
+
+### Rule Configuration
+
+Rules can be configured with severity levels and options:
+
+<CodeGroup>
+```json Severity Levels
+{
+  "rules": {
+    "no-unused-vars": "off",      // Disable rule
+    "no-console": "warn",         // Warning
+    "no-debugger": "error"        // Error
+  }
+}
+```
+
+```json Rule Options
+{
+  "rules": {
+    "prefer-const": ["error", { 
+      "destructuring": "all" 
+    }],
+    "curly": ["error", "multi-line"],
+    "typescript/ban-ts-comment": ["error", { 
+      "ts-expect-error": "allow-with-description" 
+    }]
+  }
+}
+```
+</CodeGroup>
+
+### Overrides
+
+Apply different rules to specific files:
+
+```json .oxlintrc.json
+{
+  "rules": {
+    "no-console": "error"
+  },
+  "overrides": [
+    {
+      "files": ["test/**/*.test.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["**/*.config.js"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [{
+            "regex": ".*/dist/.*",
+            "message": "Don't import from dist"
+          }]
+        }]
+      }
+    }
+  ]
+}
+```
+
+### Ignore Patterns
+
+Oxlint respects `.gitignore` by default. Additional patterns:
+
+<Tabs>
+  <Tab title="Configuration File">
+    ```json .oxlintrc.json
+    {
+      "ignorePatterns": [
+        "**/fixtures/**",
+        "**/generated/**",
+        "**/*.min.js",
+        "!important-file.js"  // Negation
+      ]
+    }
+    ```
+  </Tab>
+  
+  <Tab title=".oxlintignore File">
+    ```txt .oxlintignore
+    # Build outputs
+    dist/
+    build/
+    
+    # Dependencies
+    node_modules/
+    
+    # Generated files
+    **/*.generated.ts
+    
+    # Keep specific file
+    !src/important.js
+    ```
+  </Tab>
+  
+  <Tab title="CLI Flag">
+    ```bash
+    oxlint --ignore-path .gitignore --ignore-path .eslintignore
+    ```
+  </Tab>
+</Tabs>
+
+## Available Rules
+
+### View All Rules
+
+```bash
+oxlint --rules
+```
+
+### Major Rule Collections
+
+<AccordionGroup>
+  <Accordion title="ESLint Core Rules" icon="check">
+    - `no-unused-vars` - Disallow unused variables
+    - `no-console` - Disallow console statements
+    - `no-debugger` - Disallow debugger statements
+    - `prefer-const` - Prefer const over let
+    - `no-var` - Disallow var declarations
+    - `curly` - Enforce consistent brace style
+    - And 100+ more...
+  </Accordion>
+  
+  <Accordion title="TypeScript Rules" icon="code">
+    - `@typescript-eslint/no-explicit-any` - Disallow any type
+    - `@typescript-eslint/no-unused-vars` - TS-aware unused variables
+    - `@typescript-eslint/ban-ts-comment` - Ban @ts- comments
+    - `@typescript-eslint/consistent-type-imports` - Consistent imports
+    - And 50+ more...
+  </Accordion>
+  
+  <Accordion title="React Rules" icon="react">
+    - `react/jsx-key` - Enforce key prop in iterators
+    - `react/no-array-index-key` - Prevent array index as key
+    - `react/jsx-no-duplicate-props` - No duplicate props
+    - `react-hooks/rules-of-hooks` - Enforce hooks rules
+    - `react-hooks/exhaustive-deps` - Check effect dependencies
+  </Accordion>
+  
+  <Accordion title="Import Rules" icon="arrow-right-to-bracket">
+    - `import/no-cycle` - Detect circular dependencies
+    - `import/no-duplicates` - No duplicate imports
+    - `import/extensions` - Enforce file extensions
+    - `import/no-self-import` - Prevent self-imports
+  </Accordion>
+  
+  <Accordion title="Unicorn Rules" icon="unicorn">
+    - `unicorn/filename-case` - Enforce filename conventions
+    - `unicorn/no-null` - Disallow null
+    - `unicorn/prefer-module` - Prefer ES modules
+    - `unicorn/no-array-for-each` - Prefer for-of
+  </Accordion>
+</AccordionGroup>
+
+## Performance
+
+### Benchmarks
+
+On a typical codebase (VS Code repository with 4800+ files):
+
+| Tool | Time |
+|------|------|
+| **oxlint** | **0.7s** |
+| ESLint | 60s+ |
+
+<Note>
+Oxlint is approximately **50-100x faster** than ESLint on large codebases.
+</Note>
+
+### Performance Features
+
+- **Single AST pass**: Most rules run in one traversal
+- **Parallel processing**: Multi-threaded file processing
+- **Arena allocation**: Efficient memory management
+- **Optimized parsing**: Leverages oxc's fast parser
+
+## Language Server Protocol (LSP)
+
+Oxlint includes a built-in language server for editor integration:
+
+```bash
+# Start LSP server
+oxlint --lsp
+```
+
+### Editor Integration
+
+<Tabs>
+  <Tab title="VS Code">
+    Install the [oxc VS Code extension](https://marketplace.visualstudio.com/items?itemName=oxc.oxc-vscode) for:
+    - Real-time linting
+    - Quick fixes
+    - Rule documentation on hover
+  </Tab>
+  
+  <Tab title="Neovim">
+    ```lua
+    require('lspconfig').oxc_language_server.setup({
+      cmd = { 'oxlint', '--lsp' },
+      filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
+      root_dir = require('lspconfig.util').root_pattern('package.json', '.git'),
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Other Editors">
+    Configure your LSP client to run `oxlint --lsp` for JavaScript/TypeScript files.
+  </Tab>
+</Tabs>
+
+## Migration from ESLint
+
+### Compatibility
+
+Oxlint is designed for easy migration:
+
+1. **Config format**: Supports ESLint-style configuration
+2. **Rule names**: Uses the same rule names as ESLint
+3. **Plugins**: Compatible with major ESLint plugins
+4. **Output formats**: Supports ESLint output formats
+
+### Migration Steps
+
+<Steps>
+  <Step title="Install oxlint">
+    ```bash
+    npm install -D oxlint
+    ```
+  </Step>
+  
+  <Step title="Initialize configuration">
+    ```bash
+    npx oxlint --init
+    ```
+    This creates `.oxlintrc.json` based on your project.
+  </Step>
+  
+  <Step title="Test alongside ESLint">
+    ```json package.json
+    {
+      "scripts": {
+        "lint:eslint": "eslint .",
+        "lint:oxlint": "oxlint",
+        "lint": "oxlint"  // Switch when ready
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Gradually migrate rules">
+    Start with core rules, then enable plugins as needed.
+  </Step>
+</Steps>
+
+<Warning>
+Some ESLint rules may have slight behavioral differences. Test thoroughly before full migration.
+</Warning>
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml .github/workflows/lint.yml
+name: Lint
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npx oxlint --format github
+```
+
+### GitLab CI
+
+```yaml .gitlab-ci.yml
+lint:
+  image: node:20
+  script:
+    - npm ci
+    - npx oxlint --format gitlab
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+```
+
+### Pre-commit Hook
+
+```json package.json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "oxlint --fix"
+  }
+}
+```
+
+## API Reference
+
+For programmatic usage from Node.js or Rust, see:
+
+<CardGroup cols={2}>
+  <Card title="CLI Reference" icon="terminal" href="/api/cli/oxlint">
+    Complete CLI command reference
+  </Card>
+  <Card title="Rust API" icon="rust" href="/api/rust/linter">
+    Build tools with oxc_linter crate
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Why is oxlint so much faster than ESLint?">
+    Oxlint is written in Rust with performance as a primary goal. It uses:
+    - A highly optimized parser (oxc_parser)
+    - Arena allocation for memory efficiency
+    - Single-pass AST traversal for most rules
+    - Parallel file processing
+    - No plugin loading overhead
+  </Accordion>
+  
+  <Accordion title="Does oxlint support all ESLint rules?">
+    Oxlint implements the most commonly used ESLint rules and major plugins. Check `oxlint --rules` for the complete list. If you need a specific rule, please open an issue on GitHub.
+  </Accordion>
+  
+  <Accordion title="Can I use oxlint with my existing ESLint config?">
+    Partially. Oxlint uses a similar config format but with some differences. Use `oxlint --init` to generate a compatible config based on your project.
+  </Accordion>
+  
+  <Accordion title="Does oxlint support custom plugins?">
+    Currently, oxlint has built-in support for major plugins (TypeScript, React, etc.). External JavaScript-based plugins are not yet supported, but this is planned for future releases.
+  </Accordion>
+  
+  <Accordion title="Can I use oxlint in monorepos?">
+    Yes! Oxlint is designed for monorepos and large codebases. Use nested config files or the `--disable-nested-config` flag to control configuration resolution.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/oxc-project/oxc">
+    Source code and issue tracker
+  </Card>
+  <Card title="Rule Documentation" icon="book" href="https://oxc.rs/docs/guide/usage/linter/rules">
+    Complete rule reference
+  </Card>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/9uXCAwqQZW">
+    Get help and discuss features
+  </Card>
+  <Card title="npm Package" icon="npm" href="https://www.npmjs.com/package/oxlint">
+    Install from npm
+  </Card>
+</CardGroup>

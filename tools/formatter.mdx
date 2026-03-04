@@ -1,0 +1,635 @@
+---
+title: "Formatter (oxfmt)"
+description: "Fast, opinionated code formatter compatible with Prettier"
+icon: "paintbrush"
+---
+
+## Overview
+
+Oxfmt is a blazing-fast code formatter that formats JavaScript, TypeScript, JSX, and TSX code. It's designed to be **Prettier-compatible** while providing significantly better performance.
+
+<CardGroup cols={2}>
+  <Card title="Prettier Compatible" icon="equals">
+    Drop-in replacement for Prettier with matching output for most code.
+  </Card>
+  <Card title="Multiple Languages" icon="globe">
+    Formats JavaScript, TypeScript, JSX, TSX, and TOML files.
+  </Card>
+  <Card title="Embedded Formatting" icon="code">
+    Supports Vue, Astro, Svelte, and other embedded JS/TS contexts.
+  </Card>
+  <Card title="Fast" icon="rocket">
+    Significantly faster than Prettier on large codebases.
+  </Card>
+</CardGroup>
+
+<Warning>
+Oxfmt is currently in **beta**. While it works well for many codebases, there may be edge cases where output differs from Prettier. Always test before adopting in production.
+</Warning>
+
+## Quick Start
+
+### Run without installation
+
+```bash
+npx oxfmt@latest
+```
+
+### Install locally
+
+<CodeGroup>
+```bash npm
+npm install -D oxfmt
+```
+
+```bash yarn
+yarn add -D oxfmt
+```
+
+```bash pnpm
+pnpm add -D oxfmt
+```
+</CodeGroup>
+
+Add to your `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "format": "oxfmt",
+    "format:check": "oxfmt --check"
+  }
+}
+```
+
+## CLI Usage
+
+### Basic Commands
+
+```bash
+# Format all files in current directory (writes in place)
+oxfmt
+
+# Format specific files or directories
+oxfmt src/ lib/ index.js
+
+# Check if files are formatted (doesn't write)
+oxfmt --check
+
+# List files that would be changed
+oxfmt --list-different
+
+# Format with custom config
+oxfmt -c oxfmtrc.json
+```
+
+### CLI Options
+
+<Tabs>
+  <Tab title="Mode Options">
+    | Flag | Description |
+    |------|-------------|
+    | `--write` | Format and write files in place (default) |
+    | `--check` | Check if files are formatted without writing |
+    | `--list-different` | List files that would be changed |
+    | `--stdin-filepath <PATH>` | Read from stdin and specify file path for parsing |
+    | `--lsp` | Start language server protocol server |
+    | `--init` | Initialize `.oxfmtrc.json` with default values |
+    | `--migrate <SOURCE>` | Migrate configuration from Prettier or Biome |
+  </Tab>
+  
+  <Tab title="Config Options">
+    | Flag | Description |
+    |------|-------------|
+    | `-c, --config <PATH>` | Path to configuration file |
+  </Tab>
+  
+  <Tab title="Ignore Options">
+    | Flag | Description |
+    |------|-------------|
+    | `--ignore-path <PATH>` | Path to ignore file(s) (can be specified multiple times) |
+    | `--with-node-modules` | Format code in node_modules (skipped by default) |
+  </Tab>
+  
+  <Tab title="Runtime Options">
+    | Flag | Description |
+    |------|-------------|
+    | `--threads <INT>` | Number of threads to use (defaults to CPU cores) |
+    | `--no-error-on-unmatched-pattern` | Don't exit with error when pattern is unmatched |
+  </Tab>
+</Tabs>
+
+### Glob Patterns
+
+Oxfmt supports glob patterns for flexible file selection:
+
+```bash
+# Format all TypeScript files
+oxfmt "**/*.ts"
+
+# Format JavaScript and TypeScript
+oxfmt "**/*.{js,ts,jsx,tsx}"
+
+# Exclude test files
+oxfmt "src/**/*.ts" "!**/*.test.ts"
+
+# Quote patterns to prevent shell expansion
+oxfmt '**/*.ts'
+```
+
+### Stdin/Stdout
+
+Format code via stdin:
+
+```bash
+# Format from stdin
+echo "const x=1;" | oxfmt --stdin-filepath=file.js
+
+# Use in a pipeline
+cat messy.js | oxfmt --stdin-filepath=messy.js > formatted.js
+```
+
+## Configuration
+
+### Configuration File
+
+Create `.oxfmtrc.json` in your project root:
+
+```json .oxfmtrc.json
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.min.js"
+  ]
+}
+```
+
+### Formatting Options
+
+<Tabs>
+  <Tab title="Basic Options">
+    | Option | Type | Default | Description |
+    |--------|------|---------|-------------|
+    | `printWidth` | number | 80 | Maximum line length |
+    | `tabWidth` | number | 2 | Number of spaces per indentation level |
+    | `useTabs` | boolean | false | Use tabs instead of spaces |
+    | `semi` | boolean | true | Add semicolons at end of statements |
+    | `singleQuote` | boolean | false | Use single quotes instead of double |
+  </Tab>
+  
+  <Tab title="Quote & Spacing">
+    | Option | Type | Default | Description |
+    |--------|------|---------|-------------|
+    | `quoteProps` | string | "as-needed" | Quote object properties: "as-needed", "consistent", "preserve" |
+    | `jsxSingleQuote` | boolean | false | Use single quotes in JSX |
+    | `bracketSpacing` | boolean | true | Add spaces inside object braces |
+    | `bracketSameLine` | boolean | false | Put `>` on same line in JSX |
+  </Tab>
+  
+  <Tab title="Advanced">
+    | Option | Type | Default | Description |
+    |--------|------|---------|-------------|
+    | `trailingComma` | string | "all" | Trailing commas: "all", "es5", "none" |
+    | `arrowParens` | string | "always" | Arrow function parens: "always", "avoid" |
+    | `endOfLine` | string | "lf" | Line ending: "lf", "crlf", "cr", "auto" |
+    | `proseWrap` | string | "preserve" | Markdown wrap: "always", "never", "preserve" |
+  </Tab>
+  
+  <Tab title="Sort Imports">
+    | Option | Type | Default | Description |
+    |--------|------|---------|-------------|
+    | `sortImports.enabled` | boolean | false | Enable import sorting |
+    | `sortImports.groups` | array | - | Custom import groups |
+    
+    **Import Sorting Example:**
+    ```json
+    {
+      "sortImports": {
+        "enabled": true,
+        "groups": [
+          ["^node:"],
+          ["^react", "^vue"],
+          ["^@/"],
+          ["^\\."],
+          ["^.*\\.(css\|scss)$"]
+        ]
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### EditorConfig Support
+
+Oxfmt automatically reads `.editorconfig` files:
+
+```ini .editorconfig
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+
+[*.{js,ts,jsx,tsx}]
+indent_size = 2
+
+[*.md]
+max_line_length = 80
+```
+
+### Ignore Patterns
+
+<Tabs>
+  <Tab title="Configuration File">
+    ```json .oxfmtrc.json
+    {
+      "ignorePatterns": [
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/coverage/**",
+        "**/*.min.js",
+        "!important-file.js"  // Negation
+      ]
+    }
+    ```
+  </Tab>
+  
+  <Tab title=".prettierignore">
+    Oxfmt respects `.prettierignore` files:
+    
+    ```txt .prettierignore
+    # Build outputs
+    dist
+    build
+    coverage
+    
+    # Dependencies
+    node_modules
+    
+    # Generated files
+    *.generated.ts
+    
+    # Keep specific file
+    !src/important.js
+    ```
+  </Tab>
+  
+  <Tab title="Inline Comments">
+    Disable formatting for specific code:
+    
+    ```js
+    // oxfmt-ignore
+    const matrix = [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1]
+    ];
+    
+    /* oxfmt-ignore */
+    function   unformatted  (  ) { }
+    ```
+  </Tab>
+</Tabs>
+
+## Migration from Prettier
+
+### Automated Migration
+
+```bash
+# Migrate Prettier config to oxfmt
+oxfmt --migrate prettier
+```
+
+This reads your `.prettierrc` or `prettier.config.js` and generates `.oxfmtrc.json`.
+
+### Compatibility
+
+Oxfmt aims for Prettier compatibility:
+
+<Tabs>
+  <Tab title="Supported">
+    - All major formatting options
+    - EditorConfig support
+    - Ignore files (`.prettierignore`)
+    - Glob patterns
+    - Range formatting
+    - Stdin/stdout formatting
+  </Tab>
+  
+  <Tab title="Differences">
+    - Some edge cases may format differently
+    - Plugin system not yet available
+    - Some advanced options may not be supported
+    - Comment handling may differ in rare cases
+  </Tab>
+</Tabs>
+
+### Migration Steps
+
+<Steps>
+  <Step title="Install oxfmt">
+    ```bash
+    npm install -D oxfmt
+    ```
+  </Step>
+  
+  <Step title="Migrate configuration">
+    ```bash
+    npx oxfmt --migrate prettier
+    ```
+  </Step>
+  
+  <Step title="Test formatting">
+    ```bash
+    # Format in check mode first
+    npx oxfmt --check
+    
+    # Review differences
+    git diff
+    ```
+  </Step>
+  
+  <Step title="Update scripts">
+    ```json package.json
+    {
+      "scripts": {
+        "format": "oxfmt",
+        "format:check": "oxfmt --check"
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Update pre-commit hooks">
+    ```json package.json
+    {
+      "lint-staged": {
+        "*.{js,jsx,ts,tsx}": "oxfmt"
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Embedded Language Support
+
+Oxfmt can format JavaScript/TypeScript in embedded contexts:
+
+### Vue Files
+
+```vue
+<template>
+  <div>{{ message }}</div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      message: 'Hello'
+    }
+  }
+}
+</script>
+```
+
+### Astro Files
+
+```astro
+---
+import Component from './Component.astro';
+const items = [1, 2, 3];
+---
+
+<div>{items.map(i => <span>{i}</span>)}</div>
+```
+
+### Svelte Files
+
+```svelte
+<script>
+  let count = 0;
+  $: doubled = count * 2;
+</script>
+
+<button on:click={() => count++}>
+  Count: {count}
+</button>
+```
+
+## Special Features
+
+### Import Sorting
+
+Enable automatic import sorting:
+
+```json .oxfmtrc.json
+{
+  "sortImports": {
+    "enabled": true,
+    "groups": [
+      ["^node:"],           // Node.js built-ins
+      ["^react", "^vue"],   // Frameworks
+      ["^@/"],              // Aliases
+      ["^\\."],              // Relative imports
+      ["^.*\\.(css|scss)$"] // Styles
+    ]
+  }
+}
+```
+
+Before:
+```js
+import { Button } from './Button';
+import React from 'react';
+import fs from 'node:fs';
+import styles from './styles.css';
+```
+
+After:
+```js
+import fs from 'node:fs';
+import React from 'react';
+import { Button } from './Button';
+import styles from './styles.css';
+```
+
+### Package.json Sorting
+
+Automatically sorts `package.json` fields according to common conventions.
+
+## Language Server Protocol
+
+Oxfmt includes a language server for editor integration:
+
+```bash
+# Start LSP server
+oxfmt --lsp
+```
+
+### Editor Integration
+
+<Tabs>
+  <Tab title="VS Code">
+    Install the oxc VS Code extension:
+    
+    ```json settings.json
+    {
+      "[javascript]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+      },
+      "[typescript]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+      },
+      "editor.formatOnSave": true
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Neovim">
+    ```lua
+    require('lspconfig').oxc_language_server.setup({
+      cmd = { 'oxfmt', '--lsp' },
+      filetypes = { 
+        'javascript', 'javascriptreact', 
+        'typescript', 'typescriptreact',
+        'vue', 'astro', 'svelte'
+      },
+      root_dir = require('lspconfig.util').root_pattern(
+        '.oxfmtrc.json', 
+        'package.json', 
+        '.git'
+      ),
+    })
+    ```
+  </Tab>
+  
+  <Tab title="Other Editors">
+    Configure your editor's LSP client to run `oxfmt --lsp` for supported file types.
+  </Tab>
+</Tabs>
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml .github/workflows/format.yml
+name: Format Check
+
+on: [push, pull_request]
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npx oxfmt --check
+```
+
+### Pre-commit Hook
+
+Using `lint-staged`:
+
+```json package.json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,vue,astro,svelte}": "oxfmt"
+  }
+}
+```
+
+Using `husky`:
+
+```bash
+# .husky/pre-commit
+#!/bin/sh
+npx lint-staged
+```
+
+## Performance
+
+Oxfmt is significantly faster than Prettier on large codebases:
+
+<Note>
+Performance improvements vary by codebase size and complexity. Larger codebases see more significant gains.
+</Note>
+
+### Performance Tips
+
+- Use `--threads` to control parallelism
+- Leverage ignore patterns to skip unnecessary files
+- Use `.oxfmtrc.json` instead of JS config files for faster loading
+
+## API Reference
+
+For programmatic usage:
+
+<CardGroup cols={2}>
+  <Card title="CLI Reference" icon="terminal" href="/api/cli/oxfmt">
+    Complete CLI command reference
+  </Card>
+  <Card title="Configuration" icon="gear" href="/guide/configuration">
+    Configure oxfmt with .oxfmtrc.jsonc
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Is oxfmt stable for production use?">
+    Oxfmt is in beta. It works well for many codebases but may have edge cases where output differs from Prettier. Test thoroughly before adopting in production.
+  </Accordion>
+  
+  <Accordion title="Will oxfmt match Prettier's output exactly?">
+    Oxfmt aims for Prettier compatibility but may differ in edge cases. The goal is to be "Prettier-compatible" rather than "pixel-perfect" identical.
+  </Accordion>
+  
+  <Accordion title="Can I use oxfmt with my Prettier plugins?">
+    Currently, oxfmt doesn't support Prettier plugins. Built-in support for popular file types (Vue, Astro, Svelte) is included.
+  </Accordion>
+  
+  <Accordion title="Does oxfmt support formatting ranges?">
+    Yes, when used via the language server or API. CLI range formatting is planned.
+  </Accordion>
+  
+  <Accordion title="Why is my file not being formatted?">
+    Check if the file is in `ignorePatterns`, matches `.prettierignore`, or is in `node_modules`. Use `--with-node-modules` to format node_modules.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/oxc-project/oxc">
+    Source code and issue tracker
+  </Card>
+  <Card title="npm Package" icon="npm" href="https://www.npmjs.com/package/oxfmt">
+    Install from npm
+  </Card>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/9uXCAwqQZW">
+    Get help and discuss features
+  </Card>
+  <Card title="Prettier Docs" icon="book" href="https://prettier.io/docs/en/">
+    Prettier documentation for comparison
+  </Card>
+</CardGroup>

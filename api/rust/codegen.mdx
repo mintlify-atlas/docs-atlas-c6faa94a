@@ -1,0 +1,461 @@
+---
+title: oxc_codegen
+description: JavaScript and TypeScript code generation API reference
+---
+
+Oxc's code generator converts an Abstract Syntax Tree (AST) back into JavaScript or TypeScript source code with support for minification and source maps.
+
+## Features
+
+- High-performance code generation
+- Minification support
+- Source map generation
+- Comment preservation
+- Configurable formatting (indentation, quotes, etc.)
+- TypeScript output support
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxc_codegen = "0.116.0"
+oxc_ast = "0.116.0"
+oxc_allocator = "0.116.0"
+```
+
+## Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::Codegen;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source = "const x = 1 + 2;";
+let source_type = SourceType::default();
+
+// Parse source code
+let ret = Parser::new(&allocator, source, source_type).parse();
+let program = ret.program;
+
+// Generate code
+let output = Codegen::new().build(&program);
+println!("{}", output.code);  // const x = 1 + 2;\n
+```
+
+## Core Types
+
+### Codegen
+
+<ParamField path="Codegen" type="struct">
+  Main code generator. Create with `Codegen::new()` and configure with builder methods.
+</ParamField>
+
+**Constructor:**
+
+```rust
+impl Codegen {
+    pub fn new() -> Self;
+}
+```
+
+**Configuration Methods:**
+
+```rust
+impl<'a> Codegen<'a> {
+    // Set options
+    pub fn with_options(mut self, options: CodegenOptions) -> Self;
+    
+    // Set source text for comments and source maps
+    pub fn with_source_text(mut self, source_text: &'a str) -> Self;
+    
+    // Set symbol table for identifier renaming
+    pub fn with_scoping(mut self, scoping: Option<Scoping>) -> Self;
+    
+    // Set private member name mappings from minifier
+    pub fn with_private_member_mappings(
+        mut self,
+        mappings: Option<IndexVec<ClassId, FxHashMap<String, CompactStr>>>
+    ) -> Self;
+    
+    // Generate code from AST
+    pub fn build(mut self, program: &Program<'a>) -> CodegenReturn;
+}
+```
+
+### CodegenOptions
+
+<ParamField path="CodegenOptions" type="struct">
+  Configuration for code generation.
+</ParamField>
+
+```rust
+pub struct CodegenOptions {
+    pub minify: bool,
+    pub single_quote: bool,
+    pub indent_char: IndentChar,
+    pub indent_width: u8,
+    pub initial_indent: u32,
+    pub source_map_path: Option<PathBuf>,
+    pub comments: CommentOptions,
+}
+```
+
+<ParamField path="minify" type="bool" default="false">
+  Enable minified output (removes whitespace, shortens identifiers with scoping).
+</ParamField>
+
+<ParamField path="single_quote" type="bool" default="false">
+  Use single quotes for strings. Default is double quotes.
+</ParamField>
+
+<ParamField path="indent_char" type="IndentChar" default="Tab">
+  Character to use for indentation: `Tab` or `Space`.
+</ParamField>
+
+<ParamField path="indent_width" type="u8" default="4">
+  Number of spaces per indentation level (only used with `IndentChar::Space`).
+</ParamField>
+
+<ParamField path="initial_indent" type="u32" default="0">
+  Initial indentation level. Useful for embedding generated code.
+</ParamField>
+
+<ParamField path="source_map_path" type="Option<PathBuf>">
+  Path for source map generation. If `None`, no source map is generated.
+</ParamField>
+
+<ParamField path="comments" type="CommentOptions">
+  How to handle comments in output.
+</ParamField>
+
+**Presets:**
+
+```rust
+impl CodegenOptions {
+    // Default formatting
+    pub fn default() -> Self;
+    
+    // Minified output
+    pub fn minify() -> Self;
+}
+```
+
+### CodegenReturn
+
+<ParamField path="CodegenReturn" type="struct">
+  Result of code generation.
+</ParamField>
+
+```rust
+pub struct CodegenReturn {
+    pub code: String,
+    pub map: Option<SourceMap>,
+    pub legal_comments: Vec<Comment>,
+}
+```
+
+<ParamField path="code" type="String">
+  The generated source code.
+</ParamField>
+
+<ParamField path="map" type="Option<SourceMap>">
+  Generated source map. Only present if `source_map_path` was set in options.
+</ParamField>
+
+<ParamField path="legal_comments" type="Vec<Comment>">
+  Legal comments (license headers) extracted from source.
+</ParamField>
+
+### CommentOptions
+
+<ParamField path="CommentOptions" type="enum">
+  Controls comment output behavior.
+</ParamField>
+
+```rust
+pub enum CommentOptions {
+    None,            // Omit all comments
+    Preserve,        // Keep all comments
+    PreserveLegal,   // Keep only legal comments (/*! ... */)
+}
+
+impl CommentOptions {
+    pub fn disabled() -> Self { Self::None }
+}
+```
+
+## Examples
+
+### Basic Code Generation
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::Codegen;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source = "const x = 1 + 2;";
+let source_type = SourceType::default();
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+let code = Codegen::new().build(&ret.program).code;
+
+println!("{}", code);
+```
+
+### Minified Output
+
+```rust
+use oxc_codegen::CodegenOptions;
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+
+let minified = Codegen::new()
+    .with_options(CodegenOptions::minify())
+    .build(&ret.program)
+    .code;
+
+println!("{}", minified);  // const x=1+2;
+```
+
+### With Custom Formatting
+
+```rust
+use oxc_codegen::{CodegenOptions, IndentChar};
+
+let options = CodegenOptions {
+    minify: false,
+    single_quote: true,
+    indent_char: IndentChar::Space,
+    indent_width: 2,
+    ..Default::default()
+};
+
+let code = Codegen::new()
+    .with_options(options)
+    .build(&program)
+    .code;
+```
+
+### With Source Maps
+
+```rust
+use oxc_codegen::CodegenOptions;
+use std::path::PathBuf;
+
+let options = CodegenOptions {
+    source_map_path: Some(PathBuf::from("output.js.map")),
+    ..Default::default()
+};
+
+let output = Codegen::new()
+    .with_source_text(source)  // Required for source maps
+    .with_options(options)
+    .build(&program);
+
+// Write files
+std::fs::write("output.js", output.code)?;
+if let Some(map) = output.map {
+    std::fs::write("output.js.map", map.to_json_string())?;
+}
+```
+
+### With Identifier Renaming
+
+Use scoping from semantic analysis or minifier:
+
+```rust
+use oxc_semantic::SemanticBuilder;
+
+// From semantic analysis
+let semantic = SemanticBuilder::new().build(&program).semantic;
+let scoping = semantic.into_scoping();
+
+let code = Codegen::new()
+    .with_scoping(Some(scoping))
+    .build(&program)
+    .code;
+
+// Or from minifier
+let minifier_ret = Minifier::new(options).minify(&allocator, &mut program);
+let code = Codegen::new()
+    .with_scoping(minifier_ret.scoping)
+    .build(&program)
+    .code;
+```
+
+### Generating TypeScript
+
+```rust
+let allocator = Allocator::default();
+let source = "const x: number = 42;";
+let source_type = SourceType::ts();
+
+let ret = Parser::new(&allocator, source, source_type).parse();
+let code = Codegen::new().build(&ret.program).code;
+
+println!("{}", code);  // const x: number = 42;
+```
+
+### Preserving Comments
+
+```rust
+use oxc_codegen::{CodegenOptions, CommentOptions};
+
+let options = CodegenOptions {
+    comments: CommentOptions::Preserve,
+    ..Default::default()
+};
+
+let code = Codegen::new()
+    .with_source_text(source)
+    .with_options(options)
+    .build(&program)
+    .code;
+```
+
+### Legal Comments Only
+
+```rust
+let options = CodegenOptions {
+    comments: CommentOptions::PreserveLegal,
+    minify: true,
+    ..Default::default()
+};
+
+let output = Codegen::new()
+    .with_source_text(source)
+    .with_options(options)
+    .build(&program);
+
+// Legal comments are also returned separately
+for comment in output.legal_comments {
+    println!("Legal comment: {:?}", comment);
+}
+```
+
+### Progressive Code Building
+
+```rust
+use oxc_codegen::Codegen;
+use oxc_ast::ast::*;
+
+let mut codegen = Codegen::new();
+
+// Print individual expressions
+codegen.print_expression(&expression1);
+codegen.print_str("; ");
+codegen.print_expression(&expression2);
+
+let code = codegen.into_source_text();
+```
+
+## Advanced Usage
+
+### With All Options
+
+```rust
+use oxc_codegen::{CodegenOptions, CommentOptions, IndentChar};
+use std::path::PathBuf;
+
+let options = CodegenOptions {
+    minify: false,
+    single_quote: true,
+    indent_char: IndentChar::Space,
+    indent_width: 2,
+    initial_indent: 0,
+    source_map_path: Some(PathBuf::from("output.js.map")),
+    comments: CommentOptions::PreserveLegal,
+};
+
+let output = Codegen::new()
+    .with_source_text(source)
+    .with_options(options)
+    .with_scoping(Some(scoping))
+    .with_private_member_mappings(Some(mappings))
+    .build(&program);
+
+std::fs::write("output.js", output.code)?;
+if let Some(map) = output.map {
+    std::fs::write("output.js.map", map.to_json_string())?;
+}
+```
+
+### Idempotency Testing
+
+```rust
+fn test_print_parse_print(source: &str) {
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    
+    // First: parse and print
+    let ret1 = Parser::new(&allocator, source, source_type).parse();
+    let code1 = Codegen::new().build(&ret1.program).code;
+    
+    // Second: parse printed output and print again
+    let ret2 = Parser::new(&allocator, &code1, source_type).parse();
+    let code2 = Codegen::new().build(&ret2.program).code;
+    
+    // Output should be stable
+    assert_eq!(code1, code2);
+}
+```
+
+## Performance
+
+The code generator is optimized for speed:
+
+- **Efficient buffer**: Uses a specialized `CodeBuffer` for fast string building
+- **Minimal allocations**: Reuses buffers where possible
+- **Compact output**: Minified mode removes all unnecessary whitespace
+- **Fast number printing**: Uses `dragonbox` algorithm for floating point
+
+## Formatting Details
+
+### Indentation
+
+```rust
+use oxc_codegen::{CodegenOptions, IndentChar};
+
+// Tabs (default)
+let tabs = CodegenOptions {
+    indent_char: IndentChar::Tab,
+    ..Default::default()
+};
+
+// 2 spaces
+let spaces = CodegenOptions {
+    indent_char: IndentChar::Space,
+    indent_width: 2,
+    ..Default::default()
+};
+```
+
+### Quote Style
+
+```rust
+let options = CodegenOptions {
+    single_quote: true,  // Use 'string' instead of "string"
+    ..Default::default()
+};
+```
+
+### Semicolons
+
+The codegen always emits semicolons for safety, even in minified mode.
+
+## Related
+
+- [oxc_parser](/api/rust/parser) - Parse source code into AST
+- [oxc_minifier](/api/rust/minifier) - Minify before code generation
+- [oxc_semantic](/api/rust/semantic) - Symbol table for identifier renaming
+- [Core Concepts: Codegen](/learn/architecture#code-generation)
+
+## API Documentation
+
+For complete API documentation, see [docs.rs/oxc_codegen](https://docs.rs/oxc_codegen).

@@ -1,0 +1,425 @@
+---
+title: oxc_semantic
+description: Semantic analysis and symbol resolution API reference
+---
+
+Oxc's semantic analyzer performs symbol resolution, scope analysis, and semantic validation on an AST produced by the parser.
+
+## Features
+
+- Symbol table construction
+- Scope tree building
+- Reference resolution
+- Control Flow Graph (CFG) generation
+- Type binding information
+- JSDoc parsing
+- Additional syntax error checking
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxc_semantic = "0.116.0"
+oxc_parser = "0.116.0"
+oxc_allocator = "0.116.0"
+oxc_ast = "0.116.0"
+oxc_span = "0.116.0"
+```
+
+## Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source = "let x = 1; x + 2;";
+let source_type = SourceType::default();
+
+// Parse the source
+let parsed = Parser::new(&allocator, source, source_type).parse();
+
+// Build semantic information
+let semantic_ret = SemanticBuilder::new()
+    .with_check_syntax_error(true)
+    .build(&parsed.program);
+
+if semantic_ret.errors.is_empty() {
+    let semantic = semantic_ret.semantic;
+    println!("Semantic analysis successful!");
+    println!("Found {} symbols", semantic.scoping().symbols_len());
+}
+```
+
+## Core Types
+
+### SemanticBuilder
+
+<ParamField path="SemanticBuilder" type="struct">
+  Builder for constructing semantic analysis results.
+</ParamField>
+
+**Methods:**
+
+```rust
+impl SemanticBuilder {
+    pub fn new() -> Self;
+    
+    pub fn with_check_syntax_error(mut self, yes: bool) -> Self;
+    
+    pub fn with_cfg(mut self, yes: bool) -> Self;
+    
+    pub fn with_excess_capacity(mut self, capacity: f64) -> Self;
+    
+    pub fn build(self, program: &Program) -> SemanticBuilderReturn;
+}
+```
+
+<ParamField path="with_check_syntax_error" type="method">
+  Enable additional syntax error checking beyond what the parser does. Recommended for production use.
+</ParamField>
+
+<ParamField path="with_cfg" type="method">
+  Enable Control Flow Graph generation. Requires the `cfg` feature.
+</ParamField>
+
+<ParamField path="with_excess_capacity" type="method">
+  Pre-allocate extra capacity for symbols/scopes/references. Useful before transformations that create new bindings. Pass `2.0` to triple capacity.
+</ParamField>
+
+### Semantic
+
+<ParamField path="Semantic" type="struct">
+  Contains the results of semantic analysis including scopes, symbols, and references.
+</ParamField>
+
+**Key Methods:**
+
+```rust
+impl Semantic<'a> {
+    // Scoping information
+    pub fn scoping(&self) -> &Scoping;
+    pub fn scoping_mut(&mut self) -> &mut Scoping;
+    
+    // AST nodes with parent information
+    pub fn nodes(&self) -> &AstNodes<'a>;
+    
+    // Symbol operations
+    pub fn symbol_declaration(&self, symbol_id: SymbolId) -> &AstNode<'a>;
+    pub fn symbol_references(&self, symbol_id: SymbolId) -> impl Iterator<Item = &Reference>;
+    pub fn symbol_scope(&self, symbol_id: SymbolId) -> ScopeId;
+    
+    // Reference checking
+    pub fn is_unresolved_reference(&self, node_id: NodeId) -> bool;
+    pub fn is_reference_to_global_variable(&self, ident: &IdentifierReference) -> bool;
+    
+    // Comments
+    pub fn comments(&self) -> &[Comment];
+    pub fn has_comments_between(&self, span: Span) -> bool;
+    
+    // Source information
+    pub fn source_text(&self) -> &'a str;
+    pub fn source_type(&self) -> &SourceType;
+}
+```
+
+### Scoping
+
+<ParamField path="Scoping" type="struct">
+  Symbol table, scope tree, and reference information.
+</ParamField>
+
+**Key Methods:**
+
+```rust
+impl Scoping {
+    // Scope operations
+    pub fn root_scope_id(&self) -> ScopeId;
+    pub fn scopes_len(&self) -> usize;
+    
+    // Symbol operations  
+    pub fn symbols_len(&self) -> usize;
+    pub fn symbol_name(&self, symbol_id: SymbolId) -> &str;
+    pub fn symbol_flags(&self, symbol_id: SymbolId) -> SymbolFlags;
+    pub fn symbol_span(&self, symbol_id: SymbolId) -> Span;
+    
+    // Binding lookup
+    pub fn get_binding(&self, scope_id: ScopeId, name: &str) -> Option<SymbolId>;
+    pub fn get_root_binding(&self, name: &str) -> Option<SymbolId>;
+    
+    // Reference operations
+    pub fn get_resolved_references(&self, symbol_id: SymbolId) -> impl Iterator<Item = &Reference>;
+    pub fn get_reference(&self, reference_id: ReferenceId) -> &Reference;
+    
+    // Unresolved references
+    pub fn root_unresolved_references(&self) -> &FxHashMap<Atom, Vec<ReferenceId>>;
+}
+```
+
+### AstNodes
+
+<ParamField path="AstNodes" type="struct">
+  Parent-pointing tree of all AST nodes.
+</ParamField>
+
+```rust
+impl AstNodes<'a> {
+    pub fn get_node(&self, node_id: NodeId) -> &AstNode<'a>;
+    pub fn parent_node(&self, node_id: NodeId) -> Option<&AstNode<'a>>;
+    pub fn iter(&self) -> impl Iterator<Item = &AstNode<'a>>;
+}
+```
+
+## Examples
+
+### Finding All Variable References
+
+```rust
+let allocator = Allocator::default();
+let source = r#"
+    let count = 0;
+    count++;
+    console.log(count);
+"#;
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+
+let scoping = semantic.scoping();
+
+// Find the 'count' symbol
+if let Some(symbol_id) = scoping.get_root_binding("count") {
+    println!("Symbol 'count' declared at: {:?}", scoping.symbol_span(symbol_id));
+    
+    // Get all references to 'count'
+    for reference in semantic.symbol_references(symbol_id) {
+        let span = semantic.reference_span(reference);
+        let is_write = reference.is_write();
+        println!("  Referenced at {:?}, write={}", span, is_write);
+    }
+}
+```
+
+### Checking for Undeclared Variables
+
+```rust
+let allocator = Allocator::default();
+let source = "console.log(undeclaredVar);";
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+
+// Check for unresolved references
+for (name, reference_ids) in semantic.scoping().root_unresolved_references() {
+    println!("Undeclared variable: {}", name);
+    for reference_id in reference_ids {
+        let reference = semantic.scoping().get_reference(*reference_id);
+        let node = semantic.nodes().get_node(reference.node_id());
+        println!("  Used at: {:?}", node.kind().span());
+    }
+}
+```
+
+### Walking the Scope Tree
+
+```rust
+let allocator = Allocator::default();
+let source = r#"
+    let outer = 1;
+    function foo() {
+        let inner = 2;
+        return outer + inner;
+    }
+"#;
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+
+fn print_scope(scoping: &Scoping, scope_id: ScopeId, indent: usize) {
+    let prefix = "  ".repeat(indent);
+    println!("{}Scope {:?} with {} bindings", prefix, scope_id, 
+             scoping.scope_bindings(scope_id).count());
+    
+    for child_scope_id in scoping.child_scopes(scope_id) {
+        print_scope(scoping, *child_scope_id, indent + 1);
+    }
+}
+
+let root = semantic.scoping().root_scope_id();
+print_scope(semantic.scoping(), root, 0);
+```
+
+### Using with Control Flow Graph
+
+Requires the `cfg` feature:
+
+```toml
+oxc_semantic = { version = "0.116.0", features = ["cfg"] }
+```
+
+```rust
+use oxc_semantic::SemanticBuilder;
+
+let allocator = Allocator::default();
+let source = r#"
+    function test(x) {
+        if (x > 0) {
+            return true;
+        }
+        return false;
+    }
+"#;
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let semantic = SemanticBuilder::new()
+    .with_cfg(true)
+    .build(&parsed.program)
+    .semantic;
+
+if let Some(cfg) = semantic.cfg() {
+    println!("Control flow graph has {} basic blocks", cfg.basic_blocks_len());
+}
+```
+
+### Iterating Over All Nodes
+
+```rust
+use oxc_ast::AstKind;
+
+let allocator = Allocator::default();
+let source = "const x = 1; debugger; x + 2;";
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+
+// Iterate through all nodes in the AST
+for node in semantic.nodes().iter() {
+    match node.kind() {
+        AstKind::DebuggerStatement(stmt) => {
+            println!("Found debugger statement at {:?}", stmt.span);
+        }
+        AstKind::IdentifierReference(ident) => {
+            let is_global = semantic.is_reference_to_global_variable(ident);
+            println!("Identifier '{}' is global: {}", ident.name, is_global);
+        }
+        _ => {}
+    }
+}
+```
+
+## Symbol and Reference Flags
+
+### SymbolFlags
+
+Indicates what kind of binding a symbol represents:
+
+```rust
+use oxc_syntax::symbol::SymbolFlags;
+
+let flags = scoping.symbol_flags(symbol_id);
+
+if flags.contains(SymbolFlags::FunctionScopedVariable) {
+    println!("This is a var declaration");
+}
+
+if flags.contains(SymbolFlags::BlockScopedVariable) {
+    println!("This is a let/const declaration");
+}
+
+if flags.contains(SymbolFlags::Function) {
+    println!("This is a function");
+}
+```
+
+### ReferenceFlags
+
+Indicates how a reference is used:
+
+```rust
+use oxc_syntax::reference::ReferenceFlags;
+
+for reference in semantic.symbol_references(symbol_id) {
+    if reference.is_read() {
+        println!("Symbol is read");
+    }
+    
+    if reference.is_write() {
+        println!("Symbol is written to");
+    }
+    
+    if reference.is_read() && reference.is_write() {
+        println!("Symbol is read and written (e.g., x++)");
+    }
+}
+```
+
+## JSDoc Support
+
+Requires the `jsdoc` feature:
+
+```toml
+oxc_semantic = { version = "0.116.0", features = ["jsdoc"] }
+```
+
+```rust
+let allocator = Allocator::default();
+let source = r#"
+    /**
+     * Add two numbers
+     * @param {number} a - First number
+     * @param {number} b - Second number
+     * @returns {number} Sum of a and b
+     */
+    function add(a, b) {
+        return a + b;
+    }
+"#;
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+
+// Access JSDoc comments
+if let Some(jsdoc) = semantic.jsdoc().get_function_jsdoc(/* function node */) {
+    for tag in &jsdoc.tags {
+        println!("JSDoc tag: {:?}", tag);
+    }
+}
+```
+
+## Feature Flags
+
+<ParamField path="cfg" type="feature">
+  Enable Control Flow Graph generation. Adds `oxc_cfg` dependency.
+</ParamField>
+
+<ParamField path="jsdoc" type="feature">
+  Enable JSDoc comment parsing. Adds `oxc_jsdoc` dependency.
+</ParamField>
+
+<ParamField path="linter" type="feature">
+  Enable additional data structures used by oxc_linter. Includes `jsdoc` feature.
+</ParamField>
+
+<ParamField path="serialize" type="feature">
+  Enable serialization support for semantic data structures.
+</ParamField>
+
+## Performance Tips
+
+- Use `with_excess_capacity()` before transformations to avoid reallocations
+- The `Semantic` struct owns all scoping data - extract what you need with `into_scoping()`
+- AST node iteration via `nodes()` is very fast - use it instead of recursive visitors when possible
+
+## Related
+
+- [oxc_parser](/api/rust/parser) - Parse source code before semantic analysis
+- [oxc_traverse](https://docs.rs/oxc_traverse) - AST transformation utilities
+- [Core Concepts: Semantic Analysis](/learn/architecture#semantic-analysis)
+
+## API Documentation
+
+For complete API documentation, see [docs.rs/oxc_semantic](https://docs.rs/oxc_semantic).

@@ -1,0 +1,605 @@
+---
+title: CLI Usage
+description: Complete guide to using oxlint and oxfmt command-line tools
+---
+
+# CLI Usage
+
+Oxc provides two command-line tools: `oxlint` for linting JavaScript and TypeScript code, and `oxfmt` for formatting.
+
+## oxlint CLI
+
+The oxlint CLI provides fast, parallel linting with configurable rules, plugins, and output formats.
+
+### Basic Usage
+
+```bash
+# Lint current directory
+oxlint
+
+# Lint specific files or directories
+oxlint src/
+oxlint file1.js file2.ts
+
+# Lint with configuration file
+oxlint -c .oxlintrc.json src/
+```
+
+### Core Options
+
+<ParamField path="-c, --config" type="string" default=".oxlintrc.json">
+  Path to configuration file. Supports `.json`, `.jsonc`, and experimental `.ts`/`.js` files (requires Node.js runtime).
+  
+  ```bash
+  oxlint -c custom-config.json src/
+  ```
+</ParamField>
+
+<ParamField path="--tsconfig" type="string" default="./tsconfig.json">
+  TypeScript configuration file for path aliases and project references (used by import plugin).
+  
+  ```bash
+  oxlint --tsconfig tsconfig.build.json src/
+  ```
+</ParamField>
+
+<ParamField path="--init" type="boolean">
+  Initialize a new `.oxlintrc.json` configuration file with default values.
+  
+  ```bash
+  oxlint --init
+  ```
+</ParamField>
+
+### Rule Configuration
+
+<Tabs>
+  <Tab title="Command Line">
+    Control which rules are enabled using command-line flags:
+
+    ```bash
+    # Deny specific rules or categories
+    oxlint -D correctness -D suspicious src/
+    
+    # Allow specific rules
+    oxlint -D all -A no-debugger src/
+    
+    # Mix deny and allow
+    oxlint -D correctness -A no-debugger -W no-console src/
+    ```
+
+    **Available Categories:**
+    - `correctness` - Code that is outright wrong or useless (default)
+    - `suspicious` - Code that is most likely wrong or useless
+    - `pedantic` - Strict lints with occasional false positives
+    - `perf` - Code that could be more performant
+    - `style` - Code that should be more idiomatic
+    - `restriction` - Lints preventing specific language features
+    - `nursery` - New lints under development
+    - `all` - All categories except nursery
+  </Tab>
+  <Tab title="Flags">
+    <ParamField path="-A, --allow" type="string">
+      Allow (suppress) a rule or category.
+      
+      ```bash
+      oxlint -A no-debugger src/
+      ```
+    </ParamField>
+
+    <ParamField path="-W, --warn" type="string">
+      Set a rule or category to warning level.
+      
+      ```bash
+      oxlint -W no-console src/
+      ```
+    </ParamField>
+
+    <ParamField path="-D, --deny" type="string">
+      Deny (error on) a rule or category.
+      
+      ```bash
+      oxlint -D suspicious -D pedantic src/
+      ```
+    </ParamField>
+  </Tab>
+</Tabs>
+
+### Plugin Options
+
+oxlint includes multiple plugin systems. Some plugins are enabled by default.
+
+<CodeGroup>
+```bash Enable Plugins
+# Enable optional plugins
+oxlint --react-plugin src/
+oxlint --import-plugin --tsconfig tsconfig.json src/
+oxlint --jest-plugin tests/
+oxlint --vitest-plugin tests/
+
+# Enable multiple plugins
+oxlint --react-plugin --jsx-a11y-plugin src/
+```
+
+```bash Disable Default Plugins
+# Disable plugins that are on by default
+oxlint --disable-oxc-plugin src/
+oxlint --disable-typescript-plugin src/
+oxlint --disable-unicorn-plugin src/
+```
+</CodeGroup>
+
+**Default Plugins (always enabled):**
+- `oxc` - Oxc-specific rules
+- `typescript` - TypeScript rules
+- `unicorn` - Unicorn plugin rules
+
+**Optional Plugins:**
+- `--react-plugin` - React rules
+- `--import-plugin` - Import/export validation (requires `--tsconfig`)
+- `--jsdoc-plugin` - JSDoc comment validation
+- `--jest-plugin` - Jest testing rules
+- `--vitest-plugin` - Vitest testing rules (auto-enables jest)
+- `--jsx-a11y-plugin` - JSX accessibility rules
+- `--nextjs-plugin` - Next.js specific rules
+- `--react-perf-plugin` - React performance rules
+- `--promise-plugin` - Promise usage rules
+- `--node-plugin` - Node.js rules
+- `--vue-plugin` - Vue.js rules
+
+### Fix Options
+
+<ParamField path="--fix" type="boolean">
+  Automatically fix safe issues. Only unfixed issues are reported.
+  
+  ```bash
+  oxlint --fix src/
+  ```
+</ParamField>
+
+<ParamField path="--fix-suggestions" type="boolean">
+  Apply auto-fixable suggestions. May change program behavior.
+  
+  ```bash
+  oxlint --fix-suggestions src/
+  ```
+</ParamField>
+
+<ParamField path="--fix-dangerously" type="boolean">
+  Apply dangerous fixes and suggestions. Use with caution.
+  
+  ```bash
+  oxlint --fix-dangerously src/
+  ```
+</ParamField>
+
+### Ignore Options
+
+<ParamField path="--ignore-path" type="string" default=".eslintignore">
+  Specify the ignore file to use.
+  
+  ```bash
+  oxlint --ignore-path .gitignore src/
+  ```
+</ParamField>
+
+<ParamField path="--ignore-pattern" type="string">
+  Specify patterns to ignore (can be used multiple times).
+  
+  ```bash
+  oxlint --ignore-pattern "**/*.test.js" --ignore-pattern "dist/**" src/
+  ```
+</ParamField>
+
+<ParamField path="--no-ignore" type="boolean">
+  Disable all ignore patterns and files.
+  
+  ```bash
+  oxlint --no-ignore src/
+  ```
+</ParamField>
+
+### Warning Options
+
+<ParamField path="--quiet" type="boolean">
+  Disable reporting warnings, only show errors.
+  
+  ```bash
+  oxlint --quiet src/
+  ```
+</ParamField>
+
+<ParamField path="--deny-warnings" type="boolean">
+  Treat warnings as errors (non-zero exit code).
+  
+  ```bash
+  oxlint --deny-warnings src/
+  ```
+</ParamField>
+
+<ParamField path="--max-warnings" type="number">
+  Exit with error if warnings exceed threshold.
+  
+  ```bash
+  oxlint --max-warnings 10 src/
+  ```
+</ParamField>
+
+### Output Options
+
+<ParamField path="-f, --format" type="string" default="default">
+  Output format for diagnostics.
+  
+  **Available formats:**
+  - `default` - Human-readable format
+  - `stylish` - Stylish format
+  - `json` - JSON output
+  - `unix` - Unix-style format
+  - `checkstyle` - Checkstyle XML format
+  - `github` - GitHub Actions format
+  - `gitlab` - GitLab CI format
+  - `junit` - JUnit XML format
+  
+  ```bash
+  oxlint --format json src/ > results.json
+  oxlint --format github src/  # Auto-enabled in GitHub Actions
+  ```
+</ParamField>
+
+### Advanced Options
+
+<ParamField path="--type-aware" type="boolean">
+  Enable rules that require type information.
+  
+  ```bash
+  oxlint --type-aware --tsconfig tsconfig.json src/
+  ```
+</ParamField>
+
+<ParamField path="--type-check" type="boolean">
+  Enable experimental TypeScript compiler diagnostics.
+  
+  ```bash
+  oxlint --type-check --tsconfig tsconfig.json src/
+  ```
+</ParamField>
+
+<ParamField path="--disable-nested-config" type="boolean">
+  Disable automatic loading of nested configuration files.
+  
+  ```bash
+  oxlint --disable-nested-config src/
+  ```
+</ParamField>
+
+<ParamField path="--report-unused-disable-directives" type="boolean">
+  Report directive comments like `// oxlint-disable-line` when no errors would have been reported.
+  
+  ```bash
+  oxlint --report-unused-disable-directives src/
+  ```
+</ParamField>
+
+<ParamField path="--report-unused-disable-directives-severity" type="string">
+  Same as above but specify severity: `warn`, `error`, or `off`.
+  
+  ```bash
+  oxlint --report-unused-disable-directives-severity=warn src/
+  ```
+</ParamField>
+
+### Miscellaneous Options
+
+<ParamField path="--threads" type="number">
+  Number of threads to use. Set to 1 for single-threaded execution.
+  
+  ```bash
+  oxlint --threads 4 src/
+  ```
+</ParamField>
+
+<ParamField path="--silent" type="boolean">
+  Do not display any diagnostics.
+  
+  ```bash
+  oxlint --silent src/
+  ```
+</ParamField>
+
+<ParamField path="--print-config" type="boolean">
+  Output the resolved configuration. No linting is performed.
+  
+  ```bash
+  oxlint --print-config src/main.ts
+  ```
+</ParamField>
+
+<ParamField path="--rules" type="boolean">
+  List all available rules.
+  
+  ```bash
+  oxlint --rules
+  ```
+</ParamField>
+
+<ParamField path="--lsp" type="boolean">
+  Start the Language Server Protocol server.
+  
+  ```bash
+  oxlint --lsp
+  ```
+</ParamField>
+
+---
+
+## oxfmt CLI
+
+The oxfmt CLI provides fast code formatting with Prettier-compatible options.
+
+### Basic Usage
+
+```bash
+# Format files in place
+oxfmt src/
+
+# Format specific files
+oxfmt file1.js file2.ts
+
+# Format with configuration
+oxfmt -c .oxfmtrc.jsonc src/
+
+# Format using glob patterns (quote to prevent shell expansion)
+oxfmt 'src/**/*.{js,ts}'
+```
+
+### Mode Options
+
+<Tabs>
+  <Tab title="Write (Default)">
+    Format and write files in place:
+    
+    ```bash
+    oxfmt src/
+    # or explicitly
+    oxfmt --write src/
+    ```
+  </Tab>
+  <Tab title="Check">
+    Check if files are formatted without modifying them:
+    
+    ```bash
+    oxfmt --check src/
+    ```
+    
+    Exit code is non-zero if any files need formatting.
+  </Tab>
+  <Tab title="List Different">
+    List files that would be changed:
+    
+    ```bash
+    oxfmt --list-different src/
+    ```
+    
+    Outputs file paths that need formatting.
+  </Tab>
+  <Tab title="Stdin">
+    Read from stdin and write to stdout:
+    
+    ```bash
+    echo "const x={a:1}" | oxfmt --stdin-filepath test.js
+    ```
+    
+    Requires `--stdin-filepath` to determine parser.
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+<ParamField path="-c, --config" type="string">
+  Path to configuration file (`.oxfmtrc.json` or `.oxfmtrc.jsonc`).
+  
+  ```bash
+  oxfmt -c .oxfmtrc.jsonc src/
+  ```
+</ParamField>
+
+### Ignore Options
+
+<ParamField path="--ignore-path" type="string">
+  Path to ignore file(s). Can be specified multiple times. Defaults to `.gitignore` and `.prettierignore`.
+  
+  ```bash
+  oxfmt --ignore-path .customignore src/
+  ```
+</ParamField>
+
+<ParamField path="--with-node-modules" type="boolean">
+  Format code in `node_modules` directory (skipped by default).
+  
+  ```bash
+  oxfmt --with-node-modules src/
+  ```
+</ParamField>
+
+### Runtime Options
+
+<ParamField path="--threads" type="number">
+  Number of threads to use. Set to 1 for single-threaded execution.
+  
+  ```bash
+  oxfmt --threads 4 src/
+  ```
+</ParamField>
+
+<ParamField path="--no-error-on-unmatched-pattern" type="boolean">
+  Do not exit with error when a pattern has no matches.
+  
+  ```bash
+  oxfmt --no-error-on-unmatched-pattern 'src/**/*.vue'
+  ```
+</ParamField>
+
+### Special Modes
+
+<ParamField path="--init" type="boolean">
+  Initialize `.oxfmtrc.json` with default values.
+  
+  ```bash
+  oxfmt --init
+  ```
+</ParamField>
+
+<ParamField path="--migrate" type="string">
+  Migrate configuration from another formatter. Sources: `prettier`, `biome`.
+  
+  ```bash
+  oxfmt --migrate prettier
+  oxfmt --migrate biome
+  ```
+</ParamField>
+
+<ParamField path="--lsp" type="boolean">
+  Start the Language Server Protocol server.
+  
+  ```bash
+  oxfmt --lsp
+  ```
+</ParamField>
+
+### Path Specifications
+
+<ParamField path="PATH" type="string">
+  Single file, path, or list of paths. Glob patterns and exclude patterns (with `!` prefix) are supported.
+  
+  ```bash
+  # Single file
+  oxfmt src/main.ts
+  
+  # Multiple paths
+  oxfmt src/ tests/
+  
+  # Glob patterns (quote to prevent shell expansion)
+  oxfmt 'src/**/*.ts' '!src/**/*.test.ts'
+  
+  # Exclude patterns
+  oxfmt 'src/**/*.js' '!**/node_modules/**'
+  ```
+</ParamField>
+
+### Examples
+
+<CodeGroup>
+```bash Format Project
+# Format entire project
+oxfmt .
+
+# Format with check in CI
+oxfmt --check src/
+```
+
+```bash Format Specific Files
+# Format TypeScript files
+oxfmt 'src/**/*.{ts,tsx}'
+
+# Format with exclusions
+oxfmt 'src/**/*.js' '!src/**/*.test.js'
+```
+
+```bash Pipeline Usage
+# Format from stdin
+cat file.js | oxfmt --stdin-filepath file.js
+
+# Check single file
+oxfmt --check src/main.ts
+```
+</CodeGroup>
+
+### Terminal Output
+
+<Tabs>
+  <Tab title="Write Mode">
+    ```bash
+    $ oxfmt src/
+    src/utils.ts 123ms
+    src/main.ts 45ms
+    Formatted 2 files in 168ms
+    ```
+  </Tab>
+  <Tab title="Check Mode">
+    ```bash
+    $ oxfmt --check src/
+    Checking formatting...
+    src/utils.ts - needs formatting
+    src/main.ts - formatted correctly
+    
+    1 file needs formatting
+    1 file formatted correctly
+    ```
+  </Tab>
+  <Tab title="List Different">
+    ```bash
+    $ oxfmt --list-different src/
+    src/utils.ts
+    ```
+  </Tab>
+</Tabs>
+
+## Integration Examples
+
+### CI/CD Pipeline
+
+<CodeGroup>
+```yaml GitHub Actions
+name: Lint and Format
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install oxlint
+        run: npm install -g oxlint
+      - name: Run oxlint
+        run: oxlint --deny-warnings --format github src/
+      
+      - name: Install oxfmt
+        run: npm install -g oxfmt
+      - name: Check formatting
+        run: oxfmt --check src/
+```
+
+```yaml GitLab CI
+lint:
+  image: node:20
+  script:
+    - npm install -g oxlint
+    - oxlint --format gitlab src/
+
+format:
+  image: node:20
+  script:
+    - npm install -g oxfmt
+    - oxfmt --check src/
+```
+</CodeGroup>
+
+### Package.json Scripts
+
+```json package.json
+{
+  "scripts": {
+    "lint": "oxlint src/",
+    "lint:fix": "oxlint --fix src/",
+    "format": "oxfmt src/",
+    "format:check": "oxfmt --check src/",
+    "check": "npm run lint && npm run format:check"
+  }
+}
+```
+
+## See Also
+
+- [Configuration Guide](/guide/configuration) - Detailed configuration options
+- [Node.js Integration](/guide/nodejs-integration) - Using Oxc in Node.js
+- [Rust Integration](/guide/rust-integration) - Using Oxc in Rust projects

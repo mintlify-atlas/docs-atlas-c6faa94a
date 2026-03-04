@@ -1,0 +1,643 @@
+---
+title: Configuration
+description: Configure oxlint and oxfmt with JSON configuration files
+---
+
+# Configuration
+
+Oxc tools use JSON-based configuration files for customizing behavior. This guide covers both oxlint and oxfmt configuration formats.
+
+## oxlint Configuration
+
+### Configuration File
+
+oxlint reads configuration from `.oxlintrc.json` or `.oxlintrc.jsonc` (JSON with comments).
+
+<CodeGroup>
+```json .oxlintrc.json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "react", "import"],
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "globals": {
+    "myGlobal": "readonly",
+    "anotherGlobal": "writable"
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off"
+  },
+  "rules": {
+    "no-console": "warn",
+    "no-debugger": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "multi-line"],
+    "react/jsx-key": "error",
+    "typescript/no-explicit-any": "warn",
+    "import/no-cycle": "error"
+  },
+  "ignorePatterns": [
+    "dist/**",
+    "build/**",
+    "*.min.js",
+    "node_modules/**"
+  ],
+  "overrides": [
+    {
+      "files": ["*.test.ts", "*.spec.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ]
+}
+```
+
+```typescript oxlint.config.ts
+// Experimental: TypeScript/JavaScript configuration (requires Node.js)
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  plugins: ["typescript", "unicorn", "react", "import"],
+  env: {
+    browser: true,
+    node: true,
+  },
+  globals: {
+    myGlobal: "readonly",
+  },
+  categories: {
+    correctness: "error",
+    suspicious: "warn",
+  },
+  rules: {
+    "no-console": "warn",
+    "eqeqeq": ["error", "always"],
+  },
+});
+```
+</CodeGroup>
+
+### Configuration Schema
+
+<ParamField path="$schema" type="string">
+  URI to JSON schema for editor autocomplete and validation.
+  
+  ```json
+  "$schema": "./node_modules/oxlint/configuration_schema.json"
+  ```
+</ParamField>
+
+<ParamField path="plugins" type="string[]">
+  Array of plugin names to enable. Setting this field overrides the default plugins.
+  
+  **Available plugins:**
+  - `typescript` (default)
+  - `unicorn` (default)
+  - `oxc` (default)
+  - `react`
+  - `import`
+  - `jsdoc`
+  - `jest`
+  - `vitest`
+  - `jsx-a11y`
+  - `nextjs`
+  - `react-perf`
+  - `promise`
+  - `node`
+  - `vue`
+  
+  ```json
+  "plugins": ["typescript", "react", "import"]
+  ```
+</ParamField>
+
+<ParamField path="env" type="object">
+  Enable or disable collections of global variables.
+  
+  **Available environments:**
+  - `browser` - Browser globals (window, document, etc.)
+  - `node` - Node.js globals (process, Buffer, etc.)
+  - `es2015`, `es2017`, `es2020`, `es2021`, etc. - ECMAScript version globals
+  - `builtin` - Built-in JavaScript globals (default: true)
+  
+  ```json
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2021": true
+  }
+  ```
+</ParamField>
+
+<ParamField path="globals" type="object">
+  Define custom global variables.
+  
+  Values:
+  - `"readonly"` or `"readable"` - Read-only global
+  - `"writable"` or `"writeable"` - Writable global
+  - `"off"` - Disable the global
+  
+  ```json
+  "globals": {
+    "jQuery": "readonly",
+    "$": "readonly",
+    "myGlobal": "writable"
+  }
+  ```
+</ParamField>
+
+<ParamField path="categories" type="object">
+  Set severity levels for entire rule categories.
+  
+  **Categories:**
+  - `correctness` - Outright wrong or useless code
+  - `suspicious` - Most likely wrong code
+  - `pedantic` - Strict rules with occasional false positives
+  - `perf` - Performance improvements
+  - `style` - Idiomatic style improvements
+  - `restriction` - Language feature restrictions
+  - `nursery` - New rules under development
+  
+  ```json
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off"
+  }
+  ```
+</ParamField>
+
+<ParamField path="rules" type="object">
+  Configure individual rules with severity and options.
+  
+  **Severity levels:**
+  - `"off"` or `0` - Disable rule
+  - `"warn"` or `1` - Warning
+  - `"error"` or `2` - Error
+  
+  **Rule configuration formats:**
+  - Simple: `"rule-name": "error"`
+  - With options: `"rule-name": ["error", { "option": value }]`
+  
+  ```json
+  "rules": {
+    "no-console": "warn",
+    "no-debugger": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "multi-line"],
+    "prefer-const": ["error", { "destructuring": "all" }]
+  }
+  ```
+</ParamField>
+
+<ParamField path="settings" type="object">
+  Plugin-specific settings shared across rules.
+  
+  ```json
+  "settings": {
+    "react": {
+      "version": "18.2.0"
+    },
+    "import/resolver": {
+      "typescript": true
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField path="ignorePatterns" type="string[]">
+  Glob patterns for files to ignore. Resolved from configuration file location.
+  
+  ```json
+  "ignorePatterns": [
+    "dist/**",
+    "build/**",
+    "*.min.js",
+    "**/*.d.ts",
+    "node_modules/**"
+  ]
+  ```
+</ParamField>
+
+<ParamField path="extends" type="string[]">
+  Inherit configuration from other files. Files are merged in order, with later files overriding earlier ones.
+  
+  ```json
+  "extends": [
+    "./base-config.json",
+    "./typescript-config.json"
+  ]
+  ```
+</ParamField>
+
+<ParamField path="overrides" type="array">
+  Override rules for specific files or patterns.
+  
+  ```json
+  "overrides": [
+    {
+      "files": ["*.test.ts", "*.spec.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["scripts/**/*.js"],
+      "env": {
+        "node": true
+      },
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ]
+  ```
+</ParamField>
+
+<ParamField path="jsPlugins" type="array">
+  Enable ESLint plugins written in JavaScript (experimental).
+  
+  ```json
+  "jsPlugins": [
+    "./custom-plugin.js",
+    { "name": "import-js", "specifier": "eslint-plugin-import" }
+  ],
+  "rules": {
+    "custom/rule-name": "warn",
+    "import-js/no-unresolved": "error"
+  }
+  ```
+</ParamField>
+
+<ParamField path="options" type="object">
+  Oxlint-specific options.
+  
+  ```json
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  }
+  ```
+  
+  <ParamField path="options.typeAware" type="boolean" default="false">
+    Enable rules requiring type information.
+  </ParamField>
+  
+  <ParamField path="options.typeCheck" type="boolean" default="false">
+    Enable experimental TypeScript compiler diagnostics.
+  </ParamField>
+</ParamField>
+
+### Real-World Examples
+
+<Tabs>
+  <Tab title="React + TypeScript">
+    ```json .oxlintrc.json
+    {
+      "$schema": "./node_modules/oxlint/configuration_schema.json",
+      "plugins": [
+        "typescript",
+        "react",
+        "jsx-a11y",
+        "react-perf"
+      ],
+      "env": {
+        "browser": true,
+        "es2021": true
+      },
+      "settings": {
+        "react": {
+          "version": "18.2.0"
+        }
+      },
+      "categories": {
+        "correctness": "error",
+        "perf": "warn"
+      },
+      "rules": {
+        "react/jsx-key": "error",
+        "react/no-array-index-key": "warn",
+        "jsx-a11y/alt-text": "error",
+        "typescript/no-explicit-any": "warn"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Node.js Project">
+    ```json .oxlintrc.json
+    {
+      "$schema": "./node_modules/oxlint/configuration_schema.json",
+      "plugins": [
+        "typescript",
+        "node",
+        "promise"
+      ],
+      "env": {
+        "node": true,
+        "es2021": true
+      },
+      "categories": {
+        "correctness": "error",
+        "suspicious": "error"
+      },
+      "rules": {
+        "no-console": "off",
+        "node/no-missing-import": "error",
+        "promise/catch-or-return": "error"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Monorepo">
+    ```json .oxlintrc.json
+    {
+      "$schema": "./node_modules/oxlint/configuration_schema.json",
+      "plugins": ["typescript", "import"],
+      "categories": {
+        "correctness": "error"
+      },
+      "rules": {
+        "import/no-cycle": "error"
+      },
+      "overrides": [
+        {
+          "files": ["packages/*/src/**/*.ts"],
+          "rules": {
+            "typescript/no-explicit-any": "error"
+          }
+        },
+        {
+          "files": ["packages/*/test/**/*.ts"],
+          "rules": {
+            "typescript/no-explicit-any": "off"
+          }
+        }
+      ]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## oxfmt Configuration
+
+### Configuration File
+
+oxfmt reads configuration from `.oxfmtrc.json` or `.oxfmtrc.jsonc`.
+
+```json .oxfmtrc.jsonc
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  // Formatting options
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "proseWrap": "preserve",
+  "htmlWhitespaceSensitivity": "css",
+  "endOfLine": "lf",
+  "insertFinalNewline": true,
+  // Ignore patterns
+  "ignorePatterns": [
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    "*.min.js"
+  ]
+}
+```
+
+### Formatting Options
+
+<ParamField path="printWidth" type="number" default="80">
+  Maximum line width before wrapping.
+  
+  ```json
+  "printWidth": 100
+  ```
+</ParamField>
+
+<ParamField path="tabWidth" type="number" default="2">
+  Number of spaces per indentation level.
+  
+  ```json
+  "tabWidth": 4
+  ```
+</ParamField>
+
+<ParamField path="useTabs" type="boolean" default="false">
+  Use tabs instead of spaces for indentation.
+  
+  ```json
+  "useTabs": false
+  ```
+</ParamField>
+
+<ParamField path="semi" type="boolean" default="true">
+  Print semicolons at the end of statements.
+  
+  ```json
+  "semi": true
+  ```
+</ParamField>
+
+<ParamField path="singleQuote" type="boolean" default="false">
+  Use single quotes instead of double quotes.
+  
+  ```json
+  "singleQuote": true
+  ```
+</ParamField>
+
+<ParamField path="quoteProps" type="string" default="as-needed">
+  When to quote object properties.
+  
+  Options: `"as-needed"`, `"consistent"`, `"preserve"`
+  
+  ```json
+  "quoteProps": "as-needed"
+  ```
+</ParamField>
+
+<ParamField path="jsxSingleQuote" type="boolean" default="false">
+  Use single quotes in JSX.
+  
+  ```json
+  "jsxSingleQuote": false
+  ```
+</ParamField>
+
+<ParamField path="trailingComma" type="string" default="es5">
+  Print trailing commas where valid in ES5.
+  
+  Options: `"none"`, `"es5"`, `"all"`
+  
+  ```json
+  "trailingComma": "es5"
+  ```
+</ParamField>
+
+<ParamField path="bracketSpacing" type="boolean" default="true">
+  Print spaces between brackets in object literals.
+  
+  ```json
+  "bracketSpacing": true
+  ```
+  
+  - `true`: `{ foo: bar }`
+  - `false`: `{foo: bar}`
+</ParamField>
+
+<ParamField path="bracketSameLine" type="boolean" default="false">
+  Put the `>` of multi-line elements at the end of the last line.
+  
+  ```json
+  "bracketSameLine": false
+  ```
+</ParamField>
+
+<ParamField path="arrowParens" type="string" default="always">
+  Include parentheses around sole arrow function parameter.
+  
+  Options: `"always"`, `"avoid"`
+  
+  ```json
+  "arrowParens": "always"
+  ```
+  
+  - `"always"`: `(x) => x`
+  - `"avoid"`: `x => x`
+</ParamField>
+
+<ParamField path="proseWrap" type="string" default="preserve">
+  How to wrap prose (markdown, etc.).
+  
+  Options: `"always"`, `"never"`, `"preserve"`
+  
+  ```json
+  "proseWrap": "preserve"
+  ```
+</ParamField>
+
+<ParamField path="htmlWhitespaceSensitivity" type="string" default="css">
+  Whitespace sensitivity for HTML, Vue, Angular.
+  
+  Options: `"css"`, `"strict"`, `"ignore"`
+  
+  ```json
+  "htmlWhitespaceSensitivity": "css"
+  ```
+</ParamField>
+
+<ParamField path="endOfLine" type="string" default="lf">
+  Line ending style.
+  
+  Options: `"lf"`, `"crlf"`, `"cr"`
+  
+  ```json
+  "endOfLine": "lf"
+  ```
+</ParamField>
+
+<ParamField path="insertFinalNewline" type="boolean" default="true">
+  Insert a final newline at the end of files.
+  
+  ```json
+  "insertFinalNewline": true
+  ```
+</ParamField>
+
+<ParamField path="embeddedLanguageFormatting" type="string" default="auto">
+  Format embedded code (CSS-in-JS, etc.).
+  
+  Options: `"auto"`, `"off"`
+  
+  ```json
+  "embeddedLanguageFormatting": "auto"
+  ```
+</ParamField>
+
+<ParamField path="ignorePatterns" type="string[]">
+  Glob patterns for files to ignore.
+  
+  ```json
+  "ignorePatterns": [
+    "dist/**",
+    "build/**",
+    "*.min.js",
+    "**/*.d.ts"
+  ]
+  ```
+</ParamField>
+
+### Advanced Options
+
+<ParamField path="objectWrap" type="string" default="preserve">
+  How to wrap object literals.
+  
+  Options: `"preserve"`, `"always"`, `"never"`
+  
+  ```json
+  "objectWrap": "preserve"
+  ```
+</ParamField>
+
+### EditorConfig Support
+
+oxfmt respects `.editorconfig` settings. Configuration file options override EditorConfig values.
+
+**Supported EditorConfig properties:**
+- `indent_style` → `useTabs`
+- `indent_size` → `tabWidth`
+- `max_line_length` → `printWidth`
+- `end_of_line` → `endOfLine`
+- `insert_final_newline` → `insertFinalNewline`
+
+### Prettier Compatibility
+
+oxfmt aims for Prettier compatibility with most options. Some differences:
+
+- No `"auto"` value for `endOfLine`
+- `embeddedLanguageFormatting` support is incomplete for some languages
+- Custom `objectWrap` option (Oxfmt extension)
+
+### Migration from Prettier
+
+```bash
+# Generate oxfmt config from Prettier config
+oxfmt --migrate prettier
+```
+
+This reads `.prettierrc`, `.prettierrc.json`, or `prettier.config.js` and generates `.oxfmtrc.json`.
+
+## Configuration Discovery
+
+Both tools search for configuration files in the following order:
+
+1. Command-line specified config (`-c` or `--config`)
+2. Configuration file in current directory
+3. Configuration file in parent directories (up to root)
+
+oxlint: `.oxlintrc.json` → `.oxlintrc.jsonc` → `oxlint.config.ts` → `oxlint.config.js`
+
+oxfmt: `.oxfmtrc.json` → `.oxfmtrc.jsonc`
+
+## See Also
+
+- [CLI Usage](/guide/cli-usage) - Command-line options and flags
+- [Rules Documentation](https://oxc.rs/docs/guide/usage/linter/rules.html) - Complete rule reference
+- [Prettier Options](https://prettier.io/docs/en/options.html) - Prettier configuration reference

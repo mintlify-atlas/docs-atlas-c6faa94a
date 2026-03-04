@@ -1,0 +1,447 @@
+---
+title: Adding Linter Rules
+description: Learn how to add new linter rules to Oxc
+---
+
+Oxc provides a rule generator to scaffold new linter rules quickly. This guide walks you through creating a new rule from scratch.
+
+## Quick Start
+
+Use the `just new-rule` command to generate a new rule:
+
+```bash
+# General syntax
+just new-rule <rule-name> <plugin>
+
+# Examples
+just new-rule no-console eslint
+just new-rule no-only jest
+just new-rule no-explicit-any typescript
+```
+
+### Plugin-Specific Commands
+
+For convenience, plugin-specific aliases are available:
+
+```bash
+just new-eslint-rule <name>      # ESLint rules
+just new-ts-rule <name>          # TypeScript rules
+just new-jest-rule <name>        # Jest rules
+just new-unicorn-rule <name>     # Unicorn rules
+just new-react-rule <name>       # React rules
+just new-jsx-a11y-rule <name>    # JSX a11y rules
+just new-import-rule <name>      # Import rules
+just new-nextjs-rule <name>      # Next.js rules
+just new-jsdoc-rule <name>       # JSDoc rules
+just new-n-rule <name>           # Node rules
+just new-promise-rule <name>     # Promise rules
+just new-vitest-rule <name>      # Vitest rules
+just new-vue-rule <name>         # Vue rules
+just new-oxc-rule <name>         # Oxc-specific rules
+```
+
+## Step-by-Step Guide
+
+<Steps>
+  <Step title="Generate the rule scaffold">
+    ```bash
+    just new-rule no-console-log eslint
+    ```
+    
+    This creates a new file in `crates/oxc_linter/src/rules/eslint/no_console_log.rs`.
+  </Step>
+
+  <Step title="Understand the generated structure">
+    The generated file includes:
+    
+    - Rule metadata (name, category, documentation)
+    - Configuration struct (if the rule accepts options)
+    - Diagnostic functions for error messages
+    - Rule implementation with the visitor pattern
+    - Test scaffolding
+  </Step>
+
+  <Step title="Implement the rule logic">
+    Edit the generated file to implement your rule's logic using the visitor pattern.
+  </Step>
+
+  <Step title="Add test cases">
+    Add passing and failing test cases in the `#[test]` section.
+  </Step>
+
+  <Step title="Regenerate the rule registry">
+    After adding or modifying rules, regenerate the rules enum:
+    
+    ```bash
+    cargo lintgen
+    ```
+  </Step>
+
+  <Step title="Format and test">
+    ```bash
+    just fmt
+    cargo test -p oxc_linter no_console_log
+    ```
+  </Step>
+</Steps>
+
+## Rule Structure
+
+A typical rule file follows this structure:
+
+### 1. Imports and Declarations
+
+```rust
+use oxc_ast::AstKind;
+use oxc_diagnostics::OxcDiagnostic;
+use oxc_macros::declare_oxc_lint;
+use oxc_span::Span;
+
+use crate::{context::LintContext, rule::Rule, AstNode};
+```
+
+### 2. Diagnostic Functions
+
+Define functions that return diagnostic messages:
+
+```rust
+fn no_console_log_diagnostic(span: Span) -> OxcDiagnostic {
+    OxcDiagnostic::warn("Unexpected console.log statement")
+        .with_help("Remove console.log or use a logger")
+        .with_label(span)
+}
+```
+
+### 3. Rule Declaration
+
+Use the `declare_oxc_lint!` macro to define the rule:
+
+```rust
+declare_oxc_lint!(
+    /// ### What it does
+    ///
+    /// Disallows the use of console.log.
+    ///
+    /// ### Why is this bad?
+    ///
+    /// Console statements should not be in production code.
+    ///
+    /// ### Examples
+    ///
+    /// Examples of **incorrect** code for this rule:
+    /// ```javascript
+    /// console.log('Hello, world!');
+    /// ```
+    ///
+    /// Examples of **correct** code for this rule:
+    /// ```javascript
+    /// logger.info('Hello, world!');
+    /// ```
+    NoConsoleLog,
+    restriction,  // or: correctness, suspicious, pedantic, perf, style
+    pending       // Remove this when rule is ready
+);
+```
+
+### 4. Rule Implementation
+
+Implement the `Rule` trait:
+
+```rust
+impl Rule for NoConsoleLog {
+    fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
+        match node.kind() {
+            AstKind::CallExpression(call_expr) => {
+                // Check if this is console.log
+                if is_console_log(call_expr) {
+                    ctx.diagnostic(no_console_log_diagnostic(call_expr.span));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+```
+
+### 5. Test Cases
+
+Add comprehensive test cases:
+
+```rust
+#[test]
+fn test() {
+    use crate::tester::Tester;
+
+    let pass = vec![
+        "logger.info('test')",
+        "console.error('error')",  // if only console.log is banned
+    ];
+
+    let fail = vec![
+        "console.log('test')",
+        "window.console.log('test')",
+    ];
+
+    Tester::new(NoConsoleLog::NAME, NoConsoleLog::PLUGIN, pass, fail)
+        .test_and_snapshot();
+}
+```
+
+## Visitor Pattern
+
+Oxc uses the visitor pattern for AST traversal. Your rule's `run` method is called for each AST node.
+
+### Common AST Kinds
+
+```rust
+match node.kind() {
+    AstKind::CallExpression(call) => {
+        // Function calls: foo()
+    }
+    AstKind::MemberExpression(member) => {
+        // Property access: obj.prop
+    }
+    AstKind::VariableDeclarator(decl) => {
+        // Variable declarations: const x = 1
+    }
+    AstKind::Function(func) => {
+        // Function declarations and expressions
+    }
+    AstKind::ArrowFunctionExpression(arrow) => {
+        // Arrow functions: () => {}
+    }
+    AstKind::IfStatement(if_stmt) => {
+        // If statements
+    }
+    AstKind::BinaryExpression(binary) => {
+        // Binary operations: x + y
+    }
+    _ => {}
+}
+```
+
+### Using Semantic Information
+
+Access semantic information via the context:
+
+```rust
+impl Rule for MyRule {
+    fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
+        // Get semantic information
+        let semantic = ctx.semantic();
+        
+        // Check scopes
+        let current_scope = semantic.scopes();
+        
+        // Check symbols
+        let symbols = semantic.symbols();
+        
+        // Check if identifier is a reference
+        if let AstKind::IdentifierReference(ident) = node.kind() {
+            if let Some(symbol_id) = semantic.symbol_id(ident) {
+                // This identifier references a symbol
+            }
+        }
+    }
+}
+```
+
+## Rule Categories
+
+Choose the appropriate category for your rule:
+
+- **`correctness`** - Code that is definitely wrong
+- **`suspicious`** - Code that is likely wrong
+- **`pedantic`** - Opinionated style choices
+- **`restriction`** - Banned patterns (opt-in)
+- **`style`** - Code style improvements
+- **`perf`** - Performance improvements
+
+## Rule Configuration
+
+If your rule accepts configuration options:
+
+```rust
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MyRuleConfig {
+    pub allow_console: bool,
+    pub max_depth: usize,
+}
+
+impl Default for MyRuleConfig {
+    fn default() -> Self {
+        Self {
+            allow_console: false,
+            max_depth: 3,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct MyRule(Box<MyRuleConfig>);
+
+impl std::ops::Deref for MyRule {
+    type Target = MyRuleConfig;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Rule for MyRule {
+    fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
+        // Access config via self.allow_console or self.max_depth
+    }
+}
+```
+
+## Testing Your Rule
+
+### Running Tests
+
+```bash
+# Run all linter tests
+cargo test -p oxc_linter
+
+# Run tests for your specific rule
+cargo test -p oxc_linter my_rule
+
+# Show test output
+cargo test -p oxc_linter my_rule -- --nocapture
+```
+
+### Test Best Practices
+
+1. **Cover all branches** - Test every code path in your rule
+2. **Include edge cases** - Test unusual or complex scenarios
+3. **Test with and without config** - If your rule has options
+4. **Use real-world examples** - Base tests on actual code patterns
+5. **Test false positives** - Ensure valid code passes
+
+### Snapshot Testing
+
+The `test_and_snapshot()` method creates snapshots of diagnostics:
+
+```rust
+Tester::new(MyRule::NAME, MyRule::PLUGIN, pass, fail)
+    .test_and_snapshot();
+```
+
+Review snapshots with:
+
+```bash
+cargo insta review
+```
+
+## Debugging Your Rule
+
+### Using the Linter Example
+
+Test your rule on actual files:
+
+```bash
+cargo run -p oxc_linter --example linter -- test.js
+
+# Watch mode
+just watch 'cargo run -p oxc_linter --example linter -- test.js'
+```
+
+### Adding Debug Output
+
+```rust
+impl Rule for MyRule {
+    fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
+        eprintln!("Visiting node: {:?}", node.kind());
+        // Your rule logic
+    }
+}
+```
+
+### Using AST Explorer
+
+Use the [Oxc Playground](https://playground.oxc.rs/) to explore the AST structure of JavaScript code.
+
+## Updating Rule Tests from Upstream
+
+If you're implementing an ESLint rule, you can pull test cases from upstream:
+
+```bash
+just update-rule-tests <rule-name> <plugin>
+
+# Example
+just update-rule-tests no-console eslint
+```
+
+## Rule Documentation
+
+Include comprehensive documentation in the `declare_oxc_lint!` macro:
+
+```rust
+declare_oxc_lint!(
+    /// ### What it does
+    ///
+    /// Brief description of what the rule checks.
+    ///
+    /// ### Why is this bad?
+    ///
+    /// Explanation of why this pattern is problematic.
+    ///
+    /// ### Examples
+    ///
+    /// Examples of **incorrect** code for this rule:
+    /// ```javascript
+    /// // bad code here
+    /// ```
+    ///
+    /// Examples of **correct** code for this rule:
+    /// ```javascript
+    /// // good code here
+    /// ```
+    MyRule,
+    correctness,
+    pending
+);
+```
+
+This documentation is used to generate the rule documentation on the [Oxc website](https://oxc.rs/docs/guide/usage/linter/rules).
+
+## Submitting Your Rule
+
+<Steps>
+  <Step title="Ensure all tests pass">
+    ```bash
+    just ready
+    ```
+  </Step>
+
+  <Step title="Update snapshots">
+    ```bash
+    cargo insta review
+    ```
+  </Step>
+
+  <Step title="Remove the pending flag">
+    Change `pending` to a category in the rule declaration once it's ready.
+  </Step>
+
+  <Step title="Create a pull request">
+    Follow the [Getting Started](/contribute/getting-started) guide for creating a PR.
+  </Step>
+</Steps>
+
+## Resources
+
+- [Linter crate source](https://github.com/oxc-project/oxc/tree/main/crates/oxc_linter)
+- [Existing rules](https://github.com/oxc-project/oxc/tree/main/crates/oxc_linter/src/rules)
+- [ESLint rules](https://eslint.org/docs/latest/rules/)
+- [TypeScript ESLint rules](https://typescript-eslint.io/rules/)
+- [Oxc Playground](https://playground.oxc.rs/)
+
+## Next Steps
+
+- Review the [Testing Guide](/contribute/testing)
+- Explore the [Architecture](/contribute/architecture)
+- Check out [existing rules](https://github.com/oxc-project/oxc/tree/main/crates/oxc_linter/src/rules) for inspiration

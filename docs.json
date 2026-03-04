@@ -1,122 +1,134 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Oxc",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#747474",
+    "light": "#0b0b0b",
+    "dark": "#b5b5b5"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/8bb572f5-18a7-4a94-be28-065f42fd48c9.svg",
+  "logo": {
+    "light": "https://media.brand.dev/a2d5ce6a-e228-43ef-b15c-6aaf770efc04.svg",
+    "dark": "https://media.brand.dev/a2d5ce6a-e228-43ef-b15c-6aaf770efc04.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/oxc-project/oxc"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/oxc-project/oxc",
+      "discord": "https://discord.gg/9uXCAwqQZW",
+      "x": "https://x.com/boshen_c"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Architecture",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "architecture/overview",
+              "architecture/design-principles",
+              "architecture/performance"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Tools",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "tools/linter",
+              "tools/formatter",
+              "tools/parser",
+              "tools/transformer",
+              "tools/minifier",
+              "tools/resolver"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Using Oxc",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guide/cli-usage",
+              "guide/configuration",
+              "guide/nodejs-integration",
+              "guide/rust-integration"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/ast",
+              "concepts/allocator",
+              "concepts/semantic-analysis",
+              "concepts/visitor-pattern"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Node.js APIs",
             "pages": [
-              "api-reference/introduction"
+              "api/parser",
+              "api/transform",
+              "api/minify"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Rust APIs",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/rust/parser",
+              "api/rust/semantic",
+              "api/rust/linter",
+              "api/rust/transformer",
+              "api/rust/minifier",
+              "api/rust/codegen"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "api/cli/oxlint",
+              "api/cli/oxfmt"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Contributing",
+        "groups": [
+          {
+            "group": "Development",
+            "pages": [
+              "contribute/getting-started",
+              "contribute/architecture",
+              "contribute/testing",
+              "contribute/adding-rules"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "contribute/code-of-conduct",
+              "contribute/faq"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

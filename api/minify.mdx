@@ -1,0 +1,857 @@
+---
+title: "Minify API"
+description: "Minify JavaScript code for production using oxc-minify"
+icon: "compress"
+---
+
+# oxc-minify
+
+A high-performance JavaScript minifier for Node.js. Reduce code size through compression, mangling, and tree-shaking with Terser-compatible options.
+
+## Installation
+
+```bash
+npm install oxc-minify
+```
+
+```bash
+pnpm add oxc-minify
+```
+
+```bash
+yarn add oxc-minify
+```
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { minifySync } from 'oxc-minify';
+
+    const result = minifySync(
+      'app.js',
+      'function add(a, b) { return a + b; } console.log(add(1, 2));'
+    );
+
+    console.log(result.code);
+    // Output: function add(n,o){return n+o}console.log(add(1,2));
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const { minifySync } = require('oxc-minify');
+
+    const result = minifySync(
+      'app.js',
+      'function add(a, b) { return a + b; } console.log(add(1, 2));'
+    );
+
+    console.log(result.code);
+    ```
+  </Tab>
+</Tabs>
+
+## API Functions
+
+### minifySync
+
+**Synchronous minification** on the current thread. This is the recommended function for most use cases.
+
+```typescript
+function minifySync(
+  filename: string,
+  sourceText: string,
+  options?: MinifyOptions
+): MinifyResult
+```
+
+<ParamField path="filename" type="string" required>
+  The name of the file being minified. Used for error messages and source maps.
+</ParamField>
+
+<ParamField path="sourceText" type="string" required>
+  The JavaScript source code to minify.
+</ParamField>
+
+<ParamField path="options" type="MinifyOptions">
+  Configuration options for minification. See [MinifyOptions](#minifyoptions) for details.
+</ParamField>
+
+**Returns:** [MinifyResult](#minifyresult)
+
+#### Example
+
+```typescript
+import { minifySync } from 'oxc-minify';
+
+const code = `
+  function calculateTotal(items) {
+    return items.reduce((sum, item) => sum + item.price, 0);
+  }
+  export { calculateTotal };
+`;
+
+const result = minifySync('utils.js', code, {
+  compress: true,
+  mangle: true,
+  sourcemap: true
+});
+
+console.log(result.code);
+console.log(result.map);
+```
+
+### minify
+
+**Asynchronous minification** on a separate thread.
+
+<Note>
+  This function can be slower than `minifySync` due to thread spawning overhead. Use `minifySync` unless you have a specific need for async.
+</Note>
+
+```typescript
+function minify(
+  filename: string,
+  sourceText: string,
+  options?: MinifyOptions
+): Promise<MinifyResult>
+```
+
+<ParamField path="filename" type="string" required>
+  The name of the file being minified.
+</ParamField>
+
+<ParamField path="sourceText" type="string" required>
+  The source code to minify.
+</ParamField>
+
+<ParamField path="options" type="MinifyOptions">
+  Configuration options for minification.
+</ParamField>
+
+**Returns:** `Promise<MinifyResult>`
+
+## MinifyOptions
+
+Configuration options for minification behavior.
+
+### Basic Options
+
+<ParamField path="module" type="boolean" default="false">
+  Treat the code as an ES module. Enables more aggressive top-level optimizations.
+
+  ```typescript
+  const result = minifySync('module.js', code, {
+    module: true  // Enables top-level mangling for modules
+  });
+  ```
+</ParamField>
+
+<ParamField path="sourcemap" type="boolean" default="false">
+  Generate source maps for the minified code.
+
+  ```typescript
+  const result = minifySync('app.js', code, {
+    sourcemap: true
+  });
+  
+  console.log(result.map); // Source map object
+  ```
+</ParamField>
+
+### Compression Options
+
+<ParamField path="compress" type="boolean | CompressOptions" default="true">
+  Enable or configure code compression. When `true`, uses default compression settings.
+
+  ```typescript
+  // Enable with defaults
+  { compress: true }
+  
+  // Disable compression
+  { compress: false }
+  
+  // Custom compression settings
+  {
+    compress: {
+      dropConsole: true,
+      dropDebugger: true,
+      unused: true
+    }
+  }
+  ```
+
+  **CompressOptions interface:**
+
+  <Expandable title="CompressOptions">
+    <ParamField path="target" type="string | string[]" default="esnext">
+      Target ECMAScript version. Set `'esnext'` to enable all highering.
+
+      ```typescript
+      {
+        compress: {
+          target: 'es2015'  // or ['es2020', 'chrome58', ...]
+        }
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="dropConsole" type="boolean" default="false">
+      Remove all `console.*` calls.
+
+      ```typescript
+      // Input:  console.log('debug'); foo();
+      // Output: foo();
+      ```
+    </ParamField>
+
+    <ParamField path="dropDebugger" type="boolean" default="true">
+      Remove `debugger;` statements.
+
+      ```typescript
+      // Input:  debugger; foo();
+      // Output: foo();
+      ```
+    </ParamField>
+
+    <ParamField path="unused" type="boolean | 'keep_assign'" default="true">
+      Drop unreferenced functions and variables.
+
+      - `true`: Remove all unused code
+      - `false`: Keep all code
+      - `'keep_assign'`: Keep simple assignments even if unused
+
+      ```typescript
+      // Input:  function unused() {} function used() {} used();
+      // Output: function used(){}used();
+      ```
+    </ParamField>
+
+    <ParamField path="joinVars" type="boolean" default="true">
+      Join consecutive `var`, `let`, and `const` statements.
+
+      ```typescript
+      // Input:  const a = 1; const b = 2;
+      // Output: const a = 1, b = 2;
+      ```
+    </ParamField>
+
+    <ParamField path="sequences" type="boolean" default="true">
+      Join consecutive simple statements using the comma operator.
+
+      ```typescript
+      // Input:  a(); b();
+      // Output: a(), b();
+      ```
+    </ParamField>
+
+    <ParamField path="dropLabels" type="string[]" default="[]">
+      List of label names to remove. Labeled statements matching these names are removed.
+
+      ```typescript
+      {
+        compress: {
+          dropLabels: ['PURE', 'DEBUG']
+        }
+      }
+      
+      // Input:  PURE: { foo(); } bar();
+      // Output: bar();
+      ```
+    </ParamField>
+
+    <ParamField path="keepNames" type="CompressOptionsKeepNames">
+      Preserve function and class names.
+
+      ```typescript
+      interface CompressOptionsKeepNames {
+        function: boolean;  // Preserve Function.prototype.name
+        class: boolean;     // Preserve Class.prototype.name
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="treeshake" type="TreeShakeOptions">
+      Configure tree-shaking behavior. See [Tree Shaking](#tree-shaking).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Mangling Options
+
+<ParamField path="mangle" type="boolean | MangleOptions" default="true">
+  Enable or configure variable name mangling. When `true`, uses default mangling settings.
+
+  ```typescript
+  // Enable with defaults
+  { mangle: true }
+  
+  // Disable mangling
+  { mangle: false }
+  
+  // Custom mangling settings
+  {
+    mangle: {
+      toplevel: true,
+      keepNames: false
+    }
+  }
+  ```
+
+  **MangleOptions interface:**
+
+  <Expandable title="MangleOptions">
+    <ParamField path="toplevel" type="boolean">
+      Mangle names in the top-level scope.
+
+      - Default: `true` for modules and CommonJS, `false` for scripts
+
+      ```typescript
+      {
+        module: true,
+        mangle: {
+          toplevel: true  // Mangle top-level names in modules
+        }
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="keepNames" type="boolean | MangleOptionsKeepNames" default="false">
+      Preserve `name` property for functions and classes.
+
+      ```typescript
+      // Boolean form
+      { keepNames: true }  // Preserve all names
+      
+      // Object form
+      {
+        keepNames: {
+          function: true,  // Preserve function names
+          class: false     // Mangle class names
+        }
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="debug" type="boolean" default="false">
+      Generate readable mangled names for debugging.
+
+      ```typescript
+      {
+        mangle: {
+          debug: true  // Names like: myVar → myVar$0
+        }
+      }
+      ```
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Code Generation Options
+
+<ParamField path="codegen" type="boolean | CodegenOptions" default="true">
+  Configure code generation and whitespace removal.
+
+  ```typescript
+  {
+    codegen: {
+      removeWhitespace: true  // default
+    }
+  }
+  
+  // Keep formatting (disable minification)
+  {
+    compress: false,
+    mangle: false,
+    codegen: {
+      removeWhitespace: false
+    }
+  }
+  ```
+</ParamField>
+
+## Tree Shaking
+
+Advanced tree-shaking options for removing dead code.
+
+```typescript
+interface TreeShakeOptions {
+  // Respect pure annotations (@__PURE__, #__NO_SIDE_EFFECTS__)
+  annotations?: boolean;  // default: true
+  
+  // Manually mark functions as pure
+  manualPureFunctions?: string[];
+  
+  // Whether property reads have side effects
+  propertyReadSideEffects?: boolean | 'always';  // default: 'always'
+  
+  // Whether accessing globals has side effects
+  unknownGlobalSideEffects?: boolean;  // default: true
+  
+  // Whether invalid imports have side effects
+  invalidImportSideEffects?: boolean;  // default: true
+}
+```
+
+### Pure Annotations
+
+```typescript
+const code = `
+  /* @__PURE__ */ console.log('debug');
+  productionCode();
+`;
+
+const result = minifySync('app.js', code, {
+  compress: {
+    treeshake: {
+      annotations: true  // Respect @__PURE__ comments
+    }
+  }
+});
+// Output: productionCode();
+```
+
+### Manual Pure Functions
+
+```typescript
+const code = `
+  debug('message');
+  logAnalytics('event');
+  runApp();
+`;
+
+const result = minifySync('app.js', code, {
+  compress: {
+    treeshake: {
+      manualPureFunctions: ['debug', 'logAnalytics']
+    }
+  }
+});
+// Output: runApp();
+```
+
+### Property Side Effects
+
+```typescript
+const code = `
+  const x = obj.prop;  // May trigger getter
+  foo();
+`;
+
+const result = minifySync('app.js', code, {
+  compress: {
+    treeshake: {
+      // false: Assume property reads have no side effects
+      // true: Assume they might have side effects
+      // 'always': Always assume side effects (safest)
+      propertyReadSideEffects: false
+    }
+  }
+});
+```
+
+## MinifyResult
+
+The result of minification, containing the minified code, source maps, and any errors.
+
+<ResponseField name="code" type="string">
+  The minified JavaScript code. Empty string if parsing failed.
+
+  ```typescript
+  const { code } = minifySync('app.js', sourceCode);
+  console.log(code);
+  ```
+</ResponseField>
+
+<ResponseField name="map" type="SourceMap | undefined">
+  Source map for the minified code. Only present if `sourcemap: true`.
+
+  ```typescript
+  interface SourceMap {
+    version: number;
+    sources: string[];
+    sourcesContent?: string[];
+    names: string[];
+    mappings: string;
+    file?: string;
+    sourceRoot?: string;
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="errors" type="OxcError[]">
+  Parse and minification errors.
+
+  ```typescript
+  if (result.errors.length > 0) {
+    console.error('Minification errors:');
+    result.errors.forEach(error => {
+      console.error(error.message);
+    });
+  }
+  ```
+</ResponseField>
+
+## Common Use Cases
+
+### Production Build
+
+```typescript
+import { minifySync } from 'oxc-minify';
+import { readFileSync, writeFileSync } from 'fs';
+
+const source = readFileSync('src/app.js', 'utf-8');
+
+const result = minifySync('app.js', source, {
+  module: true,
+  compress: {
+    dropConsole: true,
+    dropDebugger: true,
+    unused: true
+  },
+  mangle: {
+    toplevel: true
+  },
+  sourcemap: true
+});
+
+if (result.errors.length > 0) {
+  console.error('Minification failed:', result.errors);
+  process.exit(1);
+}
+
+writeFileSync('dist/app.min.js', result.code);
+writeFileSync('dist/app.min.js.map', JSON.stringify(result.map));
+
+console.log(`Minified: ${source.length} → ${result.code.length} bytes`);
+```
+
+### Development Build (Readable Output)
+
+```typescript
+const result = minifySync('app.js', code, {
+  compress: false,
+  mangle: false,
+  codegen: {
+    removeWhitespace: false  // Keep formatting
+  }
+});
+
+// Output is formatted and readable
+console.log(result.code);
+```
+
+### Remove Debug Code
+
+```typescript
+const code = `
+  function main() {
+    if (DEBUG) {
+      console.log('Debug info');
+      debugger;
+    }
+    return production();
+  }
+`;
+
+const result = minifySync('app.js', code, {
+  compress: {
+    dropConsole: true,
+    dropDebugger: true
+  },
+  define: {
+    DEBUG: 'false'
+  }
+});
+
+// Debug code is completely removed
+```
+
+### Library Bundle
+
+```typescript
+const libraryCode = `
+  export function publicAPI() {
+    return helper();
+  }
+  
+  function helper() {
+    return 'implementation';
+  }
+`;
+
+const result = minifySync('lib.js', libraryCode, {
+  module: true,
+  compress: true,
+  mangle: {
+    toplevel: false,  // Don't mangle exports
+    keepNames: {
+      function: true  // Preserve function names
+    }
+  }
+});
+```
+
+### Maximum Compression
+
+```typescript
+const result = minifySync('app.js', code, {
+  module: true,
+  compress: {
+    dropConsole: true,
+    dropDebugger: true,
+    unused: true,
+    joinVars: true,
+    sequences: true,
+    treeshake: {
+      annotations: true,
+      propertyReadSideEffects: false
+    }
+  },
+  mangle: {
+    toplevel: true,
+    keepNames: false
+  }
+});
+
+// Smallest possible output
+```
+
+### Target Specific ES Version
+
+```typescript
+const modernCode = `
+  const obj = { ...spread };
+  const value = optional?.chaining ?? fallback;
+  try { risky(); } catch { /* no binding */ }
+`;
+
+const result = minifySync('app.js', modernCode, {
+  compress: {
+    target: 'es2015'  // Transform and minify to ES2015
+  }
+});
+```
+
+## Error Handling
+
+```typescript
+import { minifySync, type OxcError } from 'oxc-minify';
+
+function minifyWithErrorHandling(filename: string, code: string) {
+  const result = minifySync(filename, code, {
+    compress: true,
+    mangle: true
+  });
+
+  if (result.errors.length > 0) {
+    console.error(`Minification errors in ${filename}:`);
+    
+    result.errors.forEach((error: OxcError) => {
+      console.error(`  [${error.severity}] ${error.message}`);
+      
+      if (error.labels && error.labels.length > 0) {
+        error.labels.forEach(label => {
+          console.error(`    at position ${label.start}-${label.end}`);
+          if (label.message) {
+            console.error(`    ${label.message}`);
+          }
+        });
+      }
+      
+      if (error.helpMessage) {
+        console.log(`  Hint: ${error.helpMessage}`);
+      }
+      
+      if (error.codeframe) {
+        console.error('\n' + error.codeframe);
+      }
+    });
+    
+    // Decide whether to fail or use partial result
+    if (result.code === '') {
+      throw new Error('Minification completely failed');
+    }
+    
+    console.warn('Using partially minified output despite errors');
+  }
+
+  return result;
+}
+```
+
+## Comparing Before and After
+
+```typescript
+import { minifySync } from 'oxc-minify';
+
+function analyzeMinification(filename: string, code: string) {
+  const result = minifySync(filename, code, {
+    compress: true,
+    mangle: true
+  });
+
+  const originalSize = Buffer.byteLength(code, 'utf-8');
+  const minifiedSize = Buffer.byteLength(result.code, 'utf-8');
+  const savings = originalSize - minifiedSize;
+  const percent = ((savings / originalSize) * 100).toFixed(2);
+
+  console.log('Minification Results:');
+  console.log(`  Original:  ${originalSize.toLocaleString()} bytes`);
+  console.log(`  Minified:  ${minifiedSize.toLocaleString()} bytes`);
+  console.log(`  Savings:   ${savings.toLocaleString()} bytes (${percent}%)`);
+
+  return result;
+}
+
+analyzeMinification('bundle.js', largeBundle);
+```
+
+## Performance Tips
+
+<Card title="Use minifySync" icon="bolt">
+  The synchronous API is faster as it avoids thread spawning overhead.
+</Card>
+
+<Card title="Profile Your Settings" icon="chart-line">
+  Test different options to find the best balance between size and speed for your use case.
+  
+  ```typescript
+  // Faster, slightly larger
+  { compress: { sequences: false } }
+  
+  // Slower, smaller
+  { compress: { sequences: true } }
+  ```
+</Card>
+
+<Card title="Cache Minified Output" icon="database">
+  Minification is deterministic. Cache results based on source content hash.
+</Card>
+
+<Card title="Parallelize Large Projects" icon="server">
+  Use worker threads to minify multiple files in parallel.
+  
+  ```typescript
+  import { Worker } from 'worker_threads';
+  
+  // In worker: minifySync(filename, code)
+  ```
+</Card>
+
+<Card title="Source Maps for Debugging" icon="bug">
+  Enable source maps in production for better error tracking.
+  
+  ```typescript
+  const result = minifySync(filename, code, {
+    sourcemap: process.env.NODE_ENV === 'production'
+  });
+  ```
+</Card>
+
+## Integration Examples
+
+### Build Script
+
+```typescript
+import { minifySync } from 'oxc-minify';
+import { glob } from 'glob';
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
+
+async function buildProject() {
+  const files = await glob('src/**/*.js');
+  
+  for (const file of files) {
+    const source = await readFile(file, 'utf-8');
+    
+    const result = minifySync(file, source, {
+      module: true,
+      compress: { dropConsole: true },
+      mangle: true,
+      sourcemap: true
+    });
+    
+    if (result.errors.length > 0) {
+      console.error(`Errors in ${file}:`, result.errors);
+      continue;
+    }
+    
+    const outFile = file.replace('src/', 'dist/');
+    await mkdir(dirname(outFile), { recursive: true });
+    await writeFile(outFile, result.code);
+    await writeFile(`${outFile}.map`, JSON.stringify(result.map));
+    
+    console.log(`✓ ${file} → ${outFile}`);
+  }
+}
+
+buildProject();
+```
+
+### Bundler Plugin
+
+```typescript
+import { minifySync } from 'oxc-minify';
+
+export function oxcMinifyPlugin(options = {}) {
+  return {
+    name: 'oxc-minify',
+    
+    renderChunk(code, chunk) {
+      if (process.env.NODE_ENV !== 'production') {
+        return null;
+      }
+      
+      const result = minifySync(chunk.fileName, code, {
+        module: true,
+        ...options
+      });
+      
+      if (result.errors.length > 0) {
+        this.error(`Minification failed: ${result.errors[0].message}`);
+      }
+      
+      return {
+        code: result.code,
+        map: result.map
+      };
+    }
+  };
+}
+```
+
+## Type Definitions
+
+Full TypeScript definitions are included:
+
+```typescript
+import type {
+  MinifyOptions,
+  MinifyResult,
+  CompressOptions,
+  MangleOptions,
+  CodegenOptions,
+  TreeShakeOptions,
+  SourceMap,
+  OxcError
+} from 'oxc-minify';
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Parser API" icon="code" href="/api/parser">
+    Parse JavaScript/TypeScript into an AST
+  </Card>
+  <Card title="Transform API" icon="wand-magic-sparkles" href="/api/transform">
+    Transform JavaScript/TypeScript code
+  </Card>
+  <Card title="Minifier Tool" icon="book" href="/tools/minifier">
+    Learn more about the Oxc minifier
+  </Card>
+  <Card title="Node.js Integration" icon="node-js" href="/guide/nodejs-integration">
+    Integrate Oxc into your Node.js workflow
+  </Card>
+</CardGroup>

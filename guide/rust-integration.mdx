@@ -1,0 +1,782 @@
+---
+title: Rust Integration
+description: Use Oxc crates in Rust projects for parsing, semantic analysis, linting, transforming, and minifying JavaScript/TypeScript
+---
+
+# Rust Integration
+
+Oxc is built in Rust and provides powerful crates for JavaScript and TypeScript tooling.
+
+## Getting Started
+
+Add Oxc crates to your `Cargo.toml`:
+
+```toml Cargo.toml
+[dependencies]
+oxc_parser = "0.116.0"
+oxc_semantic = "0.116.0"
+oxc_linter = "0.116.0"
+oxc_transformer = "0.116.0"
+oxc_minifier = "0.116.0"
+oxc_codegen = "0.116.0"
+oxc_allocator = "0.116.0"
+oxc_ast = "0.116.0"
+oxc_span = "0.116.0"
+```
+
+## Core Crates
+
+### oxc_allocator
+
+Memory allocator for efficient AST allocation.
+
+```rust
+use oxc_allocator::Allocator;
+
+fn main() {
+    // Create allocator - required for AST construction
+    let allocator = Allocator::default();
+    
+    // Use allocator with parser, semantic analysis, etc.
+    // All AST nodes are allocated in this arena
+}
+```
+
+### oxc_parser
+
+Parse JavaScript and TypeScript source code.
+
+<Steps>
+  <Step title="Basic Parsing">
+    ```rust
+    use oxc_allocator::Allocator;
+    use oxc_parser::{Parser, ParseOptions};
+    use oxc_span::SourceType;
+    use std::path::Path;
+
+    fn main() {
+        let source_text = r#"
+            function greet(name: string): string {
+                return `Hello, ${name}!`;
+            }
+        "#;
+        
+        let allocator = Allocator::default();
+        let source_type = SourceType::from_path("example.ts").unwrap();
+        
+        let ret = Parser::new(&allocator, source_text, source_type)
+            .with_options(ParseOptions {
+                parse_regular_expression: true,
+                ..ParseOptions::default()
+            })
+            .parse();
+        
+        let program = ret.program;
+        
+        if ret.errors.is_empty() {
+            println!("✓ Parsed successfully");
+            println!("Statements: {}", program.body.len());
+        } else {
+            for error in ret.errors {
+                println!("Parse error: {:?}", error);
+            }
+        }
+    }
+    ```
+  </Step>
+  <Step title="Handle Parse Errors">
+    ```rust
+    use oxc_diagnostics::Error;
+    
+    fn parse_file(source_text: &str) -> Result<(), Vec<Error>> {
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        
+        let ret = Parser::new(&allocator, source_text, source_type).parse();
+        
+        if ret.errors.is_empty() {
+            // Use ret.program here
+            Ok(())
+        } else {
+            Err(ret.errors)
+        }
+    }
+    ```
+  </Step>
+</Steps>
+
+### oxc_ast
+
+AST node definitions and utilities.
+
+```rust
+use oxc_ast::{
+    ast::{Expression, Statement},
+    AstKind,
+    visit::Visit,
+};
+use oxc_allocator::Allocator;
+
+// Custom AST visitor
+struct MyVisitor {
+    function_count: usize,
+}
+
+impl<'a> Visit<'a> for MyVisitor {
+    fn visit_function(&mut self, func: &oxc_ast::ast::Function<'a>) {
+        self.function_count += 1;
+    }
+}
+
+fn count_functions(source: &str) -> usize {
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    let ret = Parser::new(&allocator, source, source_type).parse();
+    
+    let mut visitor = MyVisitor { function_count: 0 };
+    visitor.visit_program(&ret.program);
+    
+    visitor.function_count
+}
+```
+
+### oxc_semantic
+
+Semantic analysis: scopes, symbols, and references.
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+
+fn main() {
+    let source_text = r#"
+        function outer() {
+            let x = 1;
+            function inner() {
+                console.log(x);
+            }
+        }
+    "#;
+    
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    let ret = Parser::new(&allocator, source_text, source_type).parse();
+    
+    // Build semantic information
+    let semantic_ret = SemanticBuilder::new()
+        .with_check_syntax_error(true)
+        .build(&ret.program);
+    
+    let semantic = semantic_ret.semantic;
+    
+    // Access scoping information
+    println!("Number of scopes: {}", semantic.scopes().len());
+    println!("Number of symbols: {}", semantic.symbols().len());
+    
+    // Iterate over AST nodes with semantic information
+    for node in semantic.nodes() {
+        match node.kind() {
+            AstKind::VariableDeclarator(decl) => {
+                println!("Variable declaration: {:?}", decl.id);
+            }
+            AstKind::Function(func) => {
+                if let Some(id) = &func.id {
+                    println!("Function: {}", id.name);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+```
+
+### oxc_linter
+
+Lint JavaScript and TypeScript code.
+
+<Tabs>
+  <Tab title="Basic Linting">
+    ```rust
+    use oxc_allocator::Allocator;
+    use oxc_linter::{Linter, LintOptions};
+    use oxc_parser::Parser;
+    use oxc_span::SourceType;
+
+    fn main() {
+        let source_text = r#"
+            debugger;
+            const x = 1;
+            console.log(x);
+        "#;
+        
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        let ret = Parser::new(&allocator, source_text, source_type).parse();
+        
+        let linter = Linter::from_options(LintOptions::default()).unwrap();
+        let result = linter.run(&ret.program, source_text);
+        
+        if result.is_empty() {
+            println!("✓ No linting errors");
+        } else {
+            for message in result {
+                println!("Lint error: {}", message.error);
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Custom Linter">
+    ```rust
+    use oxc_allocator::Allocator;
+    use oxc_ast::AstKind;
+    use oxc_diagnostics::OxcDiagnostic;
+    use oxc_parser::Parser;
+    use oxc_semantic::SemanticBuilder;
+    use oxc_span::{SourceType, Span};
+
+    fn no_debugger(span: Span) -> OxcDiagnostic {
+        OxcDiagnostic::error("`debugger` statement is not allowed")
+            .with_label(span)
+    }
+
+    fn custom_lint(source_text: &str) -> Vec<OxcDiagnostic> {
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        let ret = Parser::new(&allocator, source_text, source_type).parse();
+        
+        let semantic_ret = SemanticBuilder::new().build(&ret.program);
+        
+        let mut errors = vec![];
+        
+        for node in semantic_ret.semantic.nodes() {
+            if let AstKind::DebuggerStatement(stmt) = node.kind() {
+                errors.push(no_debugger(stmt.span));
+            }
+        }
+        
+        errors
+    }
+
+    fn main() {
+        let errors = custom_lint("debugger; const x = 1;");
+        println!("Found {} errors", errors.len());
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### oxc_transformer
+
+Transform modern JavaScript/TypeScript to older versions.
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::Codegen;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+use oxc_transformer::{TransformOptions, Transformer};
+use std::path::Path;
+
+fn main() {
+    let source_text = r#"
+        const add = (a, b) => a + b;
+        const obj = { ...other, added: true };
+        class Example {
+            static #privateField = 42;
+        }
+    "#;
+    
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    let path = Path::new("example.js");
+    
+    let ret = Parser::new(&allocator, source_text, source_type).parse();
+    let mut program = ret.program;
+    
+    // Build semantic information
+    let ret = SemanticBuilder::new()
+        .with_excess_capacity(2.0) // Transformer increases size
+        .build(&program);
+    
+    let scoping = ret.semantic.into_scoping();
+    
+    // Transform to ES2015
+    let transform_options = TransformOptions::from_target("es2015").unwrap();
+    let ret = Transformer::new(&allocator, path, &transform_options)
+        .build_with_scoping(scoping, &mut program);
+    
+    if !ret.errors.is_empty() {
+        for error in ret.errors {
+            println!("Transform error: {:?}", error);
+        }
+        return;
+    }
+    
+    // Generate transformed code
+    let code = Codegen::new().build(&program).code;
+    println!("Transformed code:");
+    println!("{}", code);
+}
+```
+
+### oxc_minifier
+
+Minify JavaScript code.
+
+<CodeGroup>
+```rust Basic Minification
+use oxc_allocator::Allocator;
+use oxc_codegen::{Codegen, CodegenOptions};
+use oxc_mangler::MangleOptions;
+use oxc_minifier::{CompressOptions, Minifier, MinifierOptions};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+fn main() {
+    let source_text = r#"
+        function calculateSum(a, b) {
+            const result = a + b;
+            return result;
+        }
+        console.log(calculateSum(1, 2));
+    "#;
+    
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    
+    let ret = Parser::new(&allocator, source_text, source_type).parse();
+    let mut program = ret.program;
+    
+    // Configure minifier
+    let options = MinifierOptions {
+        mangle: Some(MangleOptions::default()),
+        compress: Some(CompressOptions::smallest()),
+    };
+    
+    // Minify
+    let ret = Minifier::new(options).minify(&allocator, &mut program);
+    
+    // Generate minified code
+    let minified = Codegen::new()
+        .with_options(CodegenOptions {
+            minify: true,
+            ..CodegenOptions::default()
+        })
+        .with_scoping(ret.scoping)
+        .build(&program)
+        .code;
+    
+    println!("Minified code:");
+    println!("{}", minified);
+}
+```
+
+```rust Advanced Options
+use oxc_minifier::{CompressOptions, MinifierOptions, TreeshakeOptions};
+use oxc_mangler::MangleOptions;
+
+fn create_minifier_options() -> MinifierOptions {
+    MinifierOptions {
+        mangle: Some(MangleOptions {
+            top_level: true,
+            ..MangleOptions::default()
+        }),
+        compress: Some(CompressOptions {
+            drop_console: false,
+            drop_debugger: true,
+            dead_code: true,
+            treeshake: TreeshakeOptions {
+                annotations: true,
+                manual_pure_functions: vec!["myPureFunction".to_string()],
+                ..TreeshakeOptions::default()
+            },
+            max_iterations: Some(3),
+        }),
+    }
+}
+```
+</CodeGroup>
+
+### oxc_codegen
+
+Generate JavaScript code from AST.
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::{Codegen, CodegenOptions, CommentOptions};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+fn main() {
+    let source_text = "const x = 1; console.log(x);";
+    
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    let ret = Parser::new(&allocator, source_text, source_type).parse();
+    
+    // Generate code with options
+    let codegen_ret = Codegen::new()
+        .with_options(CodegenOptions {
+            minify: false,
+            source_map_path: None,
+            comments: CommentOptions::default(),
+            ..CodegenOptions::default()
+        })
+        .build(&ret.program);
+    
+    println!("Generated code:");
+    println!("{}", codegen_ret.code);
+    
+    if let Some(map) = codegen_ret.map {
+        println!("Source map generated");
+    }
+}
+```
+
+## Complete Examples
+
+### Parser Example
+
+From `crates/oxc_parser/examples/parser.rs`:
+
+```rust
+use std::{fs, path::Path};
+use oxc_allocator::Allocator;
+use oxc_parser::{ParseOptions, Parser};
+use oxc_span::SourceType;
+
+fn main() -> Result<(), String> {
+    let name = "test.js";
+    let path = Path::new(name);
+    let source_text = fs::read_to_string(path)
+        .map_err(|_| format!("Missing '{name}'"))?;
+    
+    let source_type = SourceType::from_path(path).unwrap();
+    let allocator = Allocator::default();
+    
+    let ret = Parser::new(&allocator, &source_text, source_type)
+        .with_options(ParseOptions {
+            parse_regular_expression: true,
+            ..ParseOptions::default()
+        })
+        .parse();
+    
+    let program = ret.program;
+    
+    // Display comments
+    println!("Comments:");
+    for comment in &program.comments {
+        let s = comment.content_span().source_text(&source_text);
+        println!("{s}");
+    }
+    
+    // Report results
+    if ret.errors.is_empty() {
+        println!("Parsed Successfully.");
+    } else {
+        for error in ret.errors {
+            let error = error.with_source_code(source_text.clone());
+            println!("{:?}", error);
+        }
+        println!("Parsed with Errors.");
+    }
+    
+    Ok(())
+}
+```
+
+### Linter Example
+
+From `crates/oxc_linter/examples/linter.rs`:
+
+```rust
+use std::{env, path::Path};
+use oxc_allocator::Allocator;
+use oxc_ast::AstKind;
+use oxc_diagnostics::OxcDiagnostic;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::{SourceType, Span};
+
+fn main() -> std::io::Result<()> {
+    let name = env::args().nth(1).unwrap_or_else(|| "test.js".to_string());
+    let path = Path::new(&name);
+    let source_text = std::fs::read_to_string(path)?;
+    
+    let allocator = Allocator::default();
+    let source_type = SourceType::from_path(path).unwrap();
+    let ret = Parser::new(&allocator, &source_text, source_type).parse();
+    
+    if !ret.errors.is_empty() {
+        print_errors(&source_text, ret.errors);
+        return Ok(());
+    }
+    
+    let semantic_ret = SemanticBuilder::new().build(&ret.program);
+    let mut errors: Vec<OxcDiagnostic> = vec![];
+    
+    // Check for violations
+    for node in semantic_ret.semantic.nodes() {
+        match node.kind() {
+            AstKind::DebuggerStatement(stmt) => {
+                errors.push(no_debugger(stmt.span));
+            }
+            AstKind::ArrayPattern(array) if array.elements.is_empty() => {
+                errors.push(no_empty_pattern("array", array.span));
+            }
+            AstKind::ObjectPattern(object) if object.properties.is_empty() => {
+                errors.push(no_empty_pattern("object", object.span));
+            }
+            _ => {}
+        }
+    }
+    
+    if errors.is_empty() {
+        println!("Success!");
+    } else {
+        print_errors(&source_text, errors);
+    }
+    
+    Ok(())
+}
+
+fn no_debugger(span: Span) -> OxcDiagnostic {
+    OxcDiagnostic::error("`debugger` statement is not allowed")
+        .with_label(span)
+}
+
+fn no_empty_pattern(binding_kind: &str, span: Span) -> OxcDiagnostic {
+    OxcDiagnostic::error("empty destructuring pattern is not allowed")
+        .with_label(span.label(format!("Empty {binding_kind} binding pattern")))
+}
+
+fn print_errors(source_text: &str, errors: Vec<OxcDiagnostic>) {
+    for error in errors {
+        let error = error.with_source_code(source_text.to_string());
+        println!("{:?}", error);
+    }
+}
+```
+
+### Transformer Example
+
+From `crates/oxc_transformer/examples/transformer.rs`:
+
+```rust
+use std::path::Path;
+use oxc_allocator::Allocator;
+use oxc_codegen::Codegen;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+use oxc_transformer::{TransformOptions, Transformer};
+
+fn main() {
+    let name = "test.js";
+    let path = Path::new(name);
+    let source_text = std::fs::read_to_string(path)
+        .unwrap_or_else(|err| panic!("{name} not found.\n{err}"));
+    
+    let allocator = Allocator::default();
+    let source_type = SourceType::from_path(path).unwrap();
+    
+    let ret = Parser::new(&allocator, &source_text, source_type).parse();
+    
+    if !ret.errors.is_empty() {
+        println!("Parser Errors:");
+        for error in ret.errors {
+            let error = error.with_source_code(source_text.clone());
+            println!("{:?}", error);
+        }
+    }
+    
+    println!("Original:\n");
+    println!("{}\n", source_text);
+    
+    let mut program = ret.program;
+    
+    let ret = SemanticBuilder::new()
+        .with_excess_capacity(2.0)
+        .build(&program);
+    
+    let scoping = ret.semantic.into_scoping();
+    
+    let transform_options = TransformOptions::enable_all();
+    
+    let ret = Transformer::new(&allocator, path, &transform_options)
+        .build_with_scoping(scoping, &mut program);
+    
+    if !ret.errors.is_empty() {
+        println!("Transformer Errors:");
+        for error in ret.errors {
+            let error = error.with_source_code(source_text.clone());
+            println!("{:?}", error);
+        }
+    }
+    
+    let printed = Codegen::new().build(&program).code;
+    println!("Transformed:\n");
+    println!("{}", printed);
+}
+```
+
+### Minifier Example
+
+From `crates/oxc_minifier/examples/minifier.rs`:
+
+```rust
+use std::path::Path;
+use oxc_allocator::Allocator;
+use oxc_codegen::{Codegen, CodegenOptions, CommentOptions};
+use oxc_mangler::MangleOptions;
+use oxc_minifier::{CompressOptions, Minifier, MinifierOptions};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+fn main() -> std::io::Result<()> {
+    let name = "test.js";
+    let path = Path::new(name);
+    let source_text = std::fs::read_to_string(path)?;
+    let source_type = SourceType::from_path(path).unwrap();
+    
+    let allocator = Allocator::default();
+    let ret = minify(&allocator, &source_text, source_type, true, true, None);
+    let printed = ret.code;
+    
+    println!("{}", printed);
+    
+    Ok(())
+}
+
+fn minify(
+    allocator: &Allocator,
+    source_text: &str,
+    source_type: SourceType,
+    mangle: bool,
+    nospace: bool,
+    max_iterations: Option<u8>,
+) -> oxc_codegen::CodegenReturn {
+    let ret = Parser::new(allocator, source_text, source_type).parse();
+    assert!(ret.errors.is_empty());
+    
+    let mut program = ret.program;
+    
+    let options = MinifierOptions {
+        mangle: mangle.then(MangleOptions::default),
+        compress: Some(CompressOptions {
+            max_iterations,
+            ..CompressOptions::smallest()
+        }),
+    };
+    
+    let ret = Minifier::new(options).minify(allocator, &mut program);
+    
+    Codegen::new()
+        .with_options(CodegenOptions {
+            minify: nospace,
+            comments: CommentOptions::disabled(),
+            ..CodegenOptions::default()
+        })
+        .with_scoping(ret.scoping)
+        .build(&program)
+}
+```
+
+## Running Examples
+
+Create a test file and run examples:
+
+```bash
+# Parser example
+echo "const x = 1;" > test.js
+cargo run -p oxc_parser --example parser test.js
+
+# Linter example
+echo "debugger;" > test.js
+cargo run -p oxc_linter --example linter test.js
+
+# Transformer example
+echo "const x = (a) => a;" > test.js
+cargo run -p oxc_transformer --example transformer test.js
+
+# Minifier example
+echo "function test() { var x = 1; return x; }" > test.js
+cargo run -p oxc_minifier --example minifier test.js --mangle
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Allocator Efficiently">
+    Create one `Allocator` per file/unit of work. All AST nodes will be deallocated when the allocator is dropped.
+    
+    ```rust
+    fn process_file(source: &str) {
+        let allocator = Allocator::default();
+        // Parse, transform, etc.
+        // All memory freed when allocator drops
+    }
+    ```
+  </Step>
+  <Step title="Build Semantic Information">
+    Always build semantic information when using transformers or linters:
+    
+    ```rust
+    let semantic = SemanticBuilder::new()
+        .with_excess_capacity(2.0) // Reserve space for transformations
+        .build(&program);
+    ```
+  </Step>
+  <Step title="Handle Errors Gracefully">
+    Check for parse and transform errors:
+    
+    ```rust
+    if !ret.errors.is_empty() {
+        for error in ret.errors {
+            eprintln!("Error: {:?}", error);
+        }
+        return Err("Failed to process");
+    }
+    ```
+  </Step>
+  <Step title="Reuse Options">
+    Create options once and reuse for multiple files:
+    
+    ```rust
+    let transform_options = TransformOptions::from_target("es2015").unwrap();
+    
+    for file in files {
+        // Use same transform_options
+    }
+    ```
+  </Step>
+</Steps>
+
+## Performance Optimization
+
+- **Parallel Processing**: Use Rayon for parallel file processing
+- **Memory Reuse**: Allocator arena allocation is very fast
+- **Minimal Cloning**: AST nodes use references with lifetimes
+- **Zero-Copy**: `Span` references source text without copying
+
+```rust
+use rayon::prelude::*;
+
+fn process_files_parallel(files: &[String]) {
+    files.par_iter().for_each(|source| {
+        let allocator = Allocator::default();
+        // Process each file in parallel
+    });
+}
+```
+
+## See Also
+
+- [Oxc Crate Documentation](https://docs.rs/oxc) - Complete API reference
+- [Node.js Integration](/guide/nodejs-integration) - Using Oxc from Node.js
+- [CLI Usage](/guide/cli-usage) - Command-line tools
+- [GitHub Repository](https://github.com/oxc-project/oxc) - Source code and examples

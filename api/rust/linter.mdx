@@ -1,0 +1,396 @@
+---
+title: oxc_linter
+description: JavaScript and TypeScript linting engine API reference
+---
+
+Oxc's linter provides a high-performance, pluggable linting engine with over 400 rules covering ESLint, TypeScript ESLint, React, JSX a11y, Next.js, and more.
+
+## Features
+
+- 400+ ESLint-compatible rules
+- TypeScript-aware linting
+- React and JSX a11y rules
+- Auto-fixing capabilities
+- Plugin system
+- Configuration via `.oxlintrc.json`
+- Extremely fast (50-100x faster than ESLint)
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxc_linter = "1.51.0"
+oxc_parser = "0.116.0"
+oxc_semantic = "0.116.0"
+oxc_allocator = "0.116.0"
+oxc_span = "0.116.0"
+```
+
+## Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_linter::{Linter, LintOptions};
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+use std::path::Path;
+
+let allocator = Allocator::default();
+let source = "debugger;";
+let source_type = SourceType::default();
+let path = Path::new("test.js");
+
+// Parse and build semantic model
+let parsed = Parser::new(&allocator, source, source_type).parse();
+let semantic = SemanticBuilder::new()
+    .with_check_syntax_error(true)
+    .build(&parsed.program)
+    .semantic;
+
+// Create linter with default rules
+let linter = Linter::default();
+
+// Run linter
+let messages = linter.run(path, vec![semantic], &allocator);
+
+for message in messages {
+    println!("{}:{}: {}", 
+             message.span.start,
+             message.span.end, 
+             message.error);
+}
+```
+
+## Core Types
+
+### Linter
+
+<ParamField path="Linter" type="struct">
+  Main linting engine. Configured with rules and options.
+</ParamField>
+
+**Constructor:**
+
+```rust
+impl Linter {
+    pub fn new(
+        options: LintOptions,
+        config: ConfigStore,
+        external_linter: Option<ExternalLinter>
+    ) -> Self;
+    
+    pub fn default() -> Self;  // Uses default configuration
+}
+```
+
+**Methods:**
+
+```rust
+impl Linter {
+    // Run linter on a file
+    pub fn run<'a>(
+        &self,
+        path: &Path,
+        context_sub_hosts: Vec<ContextSubHost<'a>>,
+        allocator: &'a Allocator
+    ) -> Vec<Message>;
+    
+    // Configure auto-fixing
+    pub fn with_fix(mut self, kind: FixKind) -> Self;
+    
+    // Get number of enabled rules
+    pub fn number_of_rules(&self, type_aware: bool) -> Option<usize>;
+}
+```
+
+### LintOptions
+
+<ParamField path="LintOptions" type="struct">
+  Configuration for the linter.
+</ParamField>
+
+```rust
+pub struct LintOptions {
+    pub fix: FixKind,
+    pub report_unused_directive: Option<AllowWarnDeny>,
+}
+```
+
+<ParamField path="fix" type="FixKind">
+  Type of fixes to apply: `None`, `Fix` (safe fixes only), or `All` (safe + suggestions).
+</ParamField>
+
+<ParamField path="report_unused_directive" type="Option<AllowWarnDeny>">
+  Whether to report unused disable directives like `// eslint-disable-next-line`.
+</ParamField>
+
+### Message
+
+<ParamField path="Message" type="struct">
+  A linting diagnostic message.
+</ParamField>
+
+```rust
+pub struct Message {
+    pub error: OxcDiagnostic,
+    pub fixes: PossibleFixes,
+}
+```
+
+<ParamField path="error" type="OxcDiagnostic">
+  The diagnostic error with location and severity.
+</ParamField>
+
+<ParamField path="fixes" type="PossibleFixes">
+  Auto-fix suggestions for this diagnostic.
+</ParamField>
+
+### FixKind
+
+<ParamField path="FixKind" type="enum">
+  Types of auto-fixes to apply.
+</ParamField>
+
+```rust
+pub enum FixKind {
+    None,           // No fixes
+    Fix,            // Only safe fixes
+    Suggestion,     // Only suggestions  
+    All,            // Both safe fixes and suggestions
+}
+```
+
+## Configuration
+
+### Using ConfigStore
+
+```rust
+use oxc_linter::{ConfigStore, ConfigStoreBuilder, LintOptions, Linter};
+
+// Build configuration from .oxlintrc.json
+let config = ConfigStoreBuilder::new()
+    .with_config_file(Path::new(".oxlintrc.json"))
+    .build()?;
+
+let linter = Linter::new(
+    LintOptions::default(),
+    config,
+    None  // No external linter
+);
+```
+
+### Programmatic Configuration
+
+```rust
+use oxc_linter::{
+    AllowWarnDeny, LintFilter, LintFilterKind,
+    ConfigStoreBuilder
+};
+
+let config = ConfigStoreBuilder::new()
+    // Enable specific rules
+    .with_filters(vec![
+        LintFilter::new(AllowWarnDeny::Deny, "no-debugger"),
+        LintFilter::new(AllowWarnDeny::Warn, "no-console"),
+    ])
+    .build()?;
+```
+
+## Examples
+
+### Simple Custom Linter
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_ast::AstKind;
+use oxc_diagnostics::OxcDiagnostic;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::{SourceType, Span};
+
+fn check_debugger(source: &str, source_type: SourceType) -> Vec<OxcDiagnostic> {
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, source, source_type).parse();
+    let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+    
+    let mut errors = vec![];
+    
+    // Check for debugger statements
+    for node in semantic.nodes() {
+        if let AstKind::DebuggerStatement(stmt) = node.kind() {
+            errors.push(
+                OxcDiagnostic::error("`debugger` statement is not allowed")
+                    .with_label(stmt.span)
+            );
+        }
+    }
+    
+    errors
+}
+
+let errors = check_debugger("debugger;", SourceType::default());
+assert_eq!(errors.len(), 1);
+```
+
+### With Auto-fixing
+
+```rust
+use oxc_linter::{FixKind, Linter, LintOptions};
+
+let linter = Linter::default()
+    .with_fix(FixKind::All);  // Apply all available fixes
+
+let messages = linter.run(path, vec![semantic], &allocator);
+
+// Collect and apply fixes
+for message in messages {
+    if let Some(fix) = message.fixes.first() {
+        println!("Fix available: {:?}", fix);
+    }
+}
+```
+
+### Custom Rule Implementation
+
+While the `oxc_linter` crate is primarily designed for the built-in oxlint tool, you can create custom lint checks using the semantic analyzer:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_ast::AstKind;
+use oxc_diagnostics::OxcDiagnostic;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+
+fn check_empty_patterns(source: &str) -> Vec<OxcDiagnostic> {
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+    let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+    
+    let mut errors = vec![];
+    
+    for node in semantic.nodes() {
+        match node.kind() {
+            AstKind::ArrayPattern(array) if array.elements.is_empty() => {
+                errors.push(
+                    OxcDiagnostic::error("Empty array pattern")
+                        .with_label(array.span)
+                );
+            }
+            AstKind::ObjectPattern(object) if object.properties.is_empty() => {
+                errors.push(
+                    OxcDiagnostic::error("Empty object pattern")
+                        .with_label(object.span)
+                );
+            }
+            _ => {}
+        }
+    }
+    
+    errors
+}
+```
+
+### Filtering Rules
+
+```rust
+use oxc_linter::{AllowWarnDeny, LintFilter};
+
+let filters = vec![
+    // Enable all rules from a category
+    LintFilter::new(AllowWarnDeny::Deny, "react"),
+    
+    // Disable specific rule
+    LintFilter::new(AllowWarnDeny::Allow, "react/no-children-prop"),
+    
+    // Enable specific rule
+    LintFilter::new(AllowWarnDeny::Warn, "no-console"),
+];
+
+let config = ConfigStoreBuilder::new()
+    .with_filters(filters)
+    .build()?;
+```
+
+## Available Rule Categories
+
+The linter includes rules from multiple sources:
+
+- **ESLint Core**: Standard JavaScript linting rules
+- **TypeScript ESLint**: TypeScript-specific rules
+- **React**: React best practices and hooks rules
+- **JSX A11y**: Accessibility rules for JSX
+- **Next.js**: Next.js specific optimizations
+- **Jest**: Testing framework rules
+- **Unicorn**: Additional code quality rules
+- **Import**: Module import/export rules
+- **Node**: Node.js specific rules
+
+## Rule Configuration
+
+Rules can be configured via `.oxlintrc.json`:
+
+```json
+{
+  "rules": {
+    "no-debugger": "error",
+    "no-console": "warn",
+    "eqeqeq": ["error", "always"],
+    "react/jsx-key": "error"
+  },
+  "env": {
+    "browser": true,
+    "node": true
+  }
+}
+```
+
+## Disable Directives
+
+The linter respects ESLint-style disable comments:
+
+```javascript
+// Disable next line
+// eslint-disable-next-line no-debugger
+debugger;
+
+// Disable entire file
+/* eslint-disable no-console */
+console.log('Hello');
+
+// Disable multiple rules
+// eslint-disable-next-line no-debugger, no-console
+```
+
+## Performance
+
+Oxc's linter is extremely fast due to:
+
+- **Single-pass analysis**: Runs all rules in one AST traversal
+- **Incremental compilation**: Reuses semantic analysis results
+- **Efficient data structures**: Compact AST representation
+- **Rust performance**: Native code with zero-cost abstractions
+
+Benchmarks show 50-100x speedup compared to ESLint on typical codebases.
+
+## Feature Flags
+
+<ParamField path="ruledocs" type="feature">
+  Enable rule documentation generation.
+</ParamField>
+
+## Related
+
+- [oxc_parser](/api/rust/parser) - Parse JavaScript/TypeScript
+- [oxc_semantic](/api/rust/semantic) - Semantic analysis for linting
+- [Core Concepts: Linter](/learn/usage/linter) - Using oxlint CLI
+
+## API Documentation
+
+For complete API documentation, see [docs.rs/oxc_linter](https://docs.rs/oxc_linter).
+
+<Note>
+The `oxc_linter` crate is primarily designed for the oxlint CLI tool. For custom linting logic, consider using `oxc_semantic` directly to analyze the AST.
+</Note>

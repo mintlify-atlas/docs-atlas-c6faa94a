@@ -1,0 +1,763 @@
+---
+title: Node.js Integration
+description: Use Oxc tools in Node.js applications with oxc-parser, oxc-transform, and oxc-minify
+---
+
+# Node.js Integration
+
+Oxc provides high-performance Node.js bindings for parsing, transforming, and minifying JavaScript and TypeScript code.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install oxc-parser oxc-transform oxc-minify
+```
+
+```bash pnpm
+pnpm add oxc-parser oxc-transform oxc-minify
+```
+
+```bash yarn
+yarn add oxc-parser oxc-transform oxc-minify
+```
+</CodeGroup>
+
+## oxc-parser
+
+Fast JavaScript and TypeScript parser with AST generation.
+
+### Basic Parsing
+
+```typescript
+import { parseSync } from "oxc-parser";
+
+const sourceCode = `
+const greeting = "Hello, World!";
+console.log(greeting);
+`;
+
+const result = parseSync("example.js", sourceCode);
+
+if (result.errors.length === 0) {
+  console.log("✓ Parsed successfully");
+  console.log("AST:", result.program);
+} else {
+  console.error("Parse errors:", result.errors);
+}
+```
+
+### Parse Result Structure
+
+```typescript
+interface ParseResult {
+  // Parsed AST
+  program: Program;
+  
+  // Parse errors (if any)
+  errors: Array<{
+    message: string;
+    labels: Array<{ start: number; end: number }>;
+  }>;
+  
+  // Comments extracted from source
+  comments: Array<{
+    type: "Line" | "Block";
+    start: number;
+    end: number;
+    value: string;
+  }>;
+  
+  // Module information
+  module: {
+    hasModuleSyntax: boolean;
+    staticImports: Array<{
+      start: number;
+      end: number;
+      moduleRequest: { start: number; end: number };
+    }>;
+    staticExports: Array<{
+      start: number;
+      end: number;
+      entries: Array<{
+        localName: { start: number; end: number };
+        exportName: { start: number; end: number };
+        isType: boolean;
+      }>;
+    }>;
+    dynamicImports: Array<{
+      start: number;
+      end: number;
+      moduleRequest: { start: number; end: number };
+    }>;
+    importMetas: Array<{ start: number; end: number }>;
+  };
+}
+```
+
+### TypeScript Parsing
+
+```typescript
+import { parseSync } from "oxc-parser";
+
+const tsCode = `
+interface User {
+  id: number;
+  name: string;
+}
+
+const user: User = { id: 1, name: "Alice" };
+`;
+
+const result = parseSync("example.ts", tsCode);
+console.log("Module has type syntax:", result.module.hasModuleSyntax);
+```
+
+### JSX/TSX Parsing
+
+```typescript
+import { parseSync } from "oxc-parser";
+
+const jsxCode = `
+import React from "react";
+
+export function App() {
+  return <div>Hello, React!</div>;
+}
+`;
+
+const result = parseSync("App.tsx", jsxCode);
+console.log("Static imports:", result.module.staticImports);
+```
+
+### Module Analysis
+
+```typescript
+import { parseSync } from "oxc-parser";
+
+function analyzeModule(filename: string, source: string) {
+  const result = parseSync(filename, source);
+  
+  return {
+    isModule: result.module.hasModuleSyntax,
+    imports: result.module.staticImports.length,
+    exports: result.module.staticExports.length,
+    dynamicImports: result.module.dynamicImports.length,
+    hasImportMeta: result.module.importMetas.length > 0,
+  };
+}
+
+const info = analyzeModule("app.js", `
+import { foo } from "./foo";
+export const bar = foo();
+`);
+
+console.log(info);
+// { isModule: true, imports: 1, exports: 1, dynamicImports: 0, hasImportMeta: false }
+```
+
+### Working with Comments
+
+```typescript
+import { parseSync } from "oxc-parser";
+
+const codeWithComments = `
+// This is a line comment
+const x = 1;
+
+/* This is a
+   block comment */
+const y = 2;
+`;
+
+const result = parseSync("example.js", codeWithComments);
+
+result.comments.forEach((comment) => {
+  console.log(`${comment.type} comment: ${comment.value}`);
+});
+```
+
+---
+
+## oxc-transform
+
+Transform modern JavaScript and TypeScript code for older environments.
+
+### Basic Transformation
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+const modernCode = `
+const add = (a, b) => a + b;
+const result = { ...obj, added: true };
+`;
+
+const result = transformSync("app.js", modernCode, {
+  target: "es2015",
+});
+
+console.log(result.code);
+// Output transformed for ES2015
+```
+
+### Transform Options
+
+```typescript
+import { transformSync, HelperMode } from "oxc-transform";
+
+const result = transformSync("app.ts", sourceCode, {
+  // Target environment
+  target: "es2015",
+  // Or specify multiple targets
+  // target: ["chrome80", "firefox75"],
+  
+  // Source map generation
+  sourcemap: true,
+  
+  // TypeScript options
+  typescript: {
+    // Generate .d.ts declaration files
+    declaration: {},
+    // Remove class fields without initializers
+    removeClassFieldsWithoutInitializer: false,
+  },
+  
+  // JSX configuration
+  jsx: {
+    runtime: "automatic", // or "classic"
+    importSource: "react",
+    development: false,
+  },
+  
+  // Helper mode
+  helpers: {
+    mode: HelperMode.Runtime, // or HelperMode.External
+  },
+  
+  // Define constants
+  define: {
+    "process.env.NODE_ENV": '"production"',
+  },
+  
+  // Inject imports
+  inject: {
+    "Object.assign": "object-assign",
+  },
+});
+
+console.log("Transformed code:", result.code);
+console.log("Source map:", result.map);
+console.log("Declaration:", result.declaration);
+console.log("Helpers used:", result.helpersUsed);
+```
+
+### TypeScript Transformation
+
+<Steps>
+  <Step title="Strip Type Annotations">
+    ```typescript
+    import { transformSync } from "oxc-transform";
+
+    const tsCode = `
+    function greet(name: string): string {
+      return \`Hello, \${name}!\`;
+    }
+    `;
+
+    const result = transformSync("greet.ts", tsCode);
+    console.log(result.code);
+    // function greet(name) {
+    //   return `Hello, ${name}!`;
+    // }
+    ```
+  </Step>
+  <Step title="Generate Declaration Files">
+    ```typescript
+    import { transformSync } from "oxc-transform";
+
+    const result = transformSync("lib.ts", tsCode, {
+      typescript: {
+        declaration: {},
+      },
+      sourcemap: true,
+    });
+
+    console.log("JS:", result.code);
+    console.log("DTS:", result.declaration);
+    console.log("DTS Map:", result.declarationMap);
+    ```
+  </Step>
+</Steps>
+
+### JSX Transformation
+
+<Tabs>
+  <Tab title="Automatic Runtime">
+    ```typescript
+    import { transformSync } from "oxc-transform";
+
+    const jsxCode = `
+    export function App() {
+      return <div className="app">Hello!</div>;
+    }
+    `;
+
+    const result = transformSync("App.tsx", jsxCode, {
+      jsx: {
+        runtime: "automatic",
+        importSource: "react",
+      },
+    });
+
+    console.log(result.code);
+    // import { jsx as _jsx } from "react/jsx-runtime";
+    // export function App() {
+    //   return _jsx("div", { className: "app", children: "Hello!" });
+    // }
+    ```
+  </Tab>
+  <Tab title="Classic Runtime">
+    ```typescript
+    const result = transformSync("App.tsx", jsxCode, {
+      jsx: {
+        runtime: "classic",
+        pragma: "React.createElement",
+        pragmaFrag: "React.Fragment",
+      },
+    });
+
+    console.log(result.code);
+    // export function App() {
+    //   return React.createElement("div", { className: "app" }, "Hello!");
+    // }
+    ```
+  </Tab>
+  <Tab title="Preserve JSX">
+    ```typescript
+    const result = transformSync("App.tsx", jsxCode, {
+      jsx: "preserve",
+    });
+
+    console.log(result.code);
+    // JSX is preserved in output
+    ```
+  </Tab>
+</Tabs>
+
+### React Refresh
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+const componentCode = `
+import { useState } from "react";
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount(count + 1)}>{count}</button>;
+}
+`;
+
+const result = transformSync("Counter.tsx", componentCode, {
+  jsx: {
+    refresh: {
+      // React Refresh options
+    },
+  },
+});
+
+console.log(result.code);
+// Includes React Refresh runtime code
+```
+
+### Define Plugin
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+const code = `
+if (process.env.NODE_ENV === "development") {
+  console.log("Debug mode");
+}
+`;
+
+const result = transformSync("app.js", code, {
+  define: {
+    "process.env.NODE_ENV": '"production"',
+    "DEBUG": "false",
+  },
+});
+
+console.log(result.code);
+// if ("production" === "development") {
+//   console.log("Debug mode");
+// }
+// Dead code elimination removes the if block
+```
+
+### Async Transformation
+
+```typescript
+import { transform } from "oxc-transform";
+
+const result = await transform("app.ts", sourceCode, {
+  target: "es2015",
+});
+
+console.log(result.code);
+```
+
+---
+
+## oxc-minify
+
+Minify JavaScript code with compression and mangling.
+
+### Basic Minification
+
+```typescript
+import { minifySync } from "oxc-minify";
+
+const code = `
+function calculateSum(a, b) {
+  const result = a + b;
+  return result;
+}
+
+console.log(calculateSum(1, 2));
+`;
+
+const result = minifySync("app.js", code);
+
+console.log(result.code);
+// function calculateSum(n,o){return n+o}console.log(calculateSum(1,2));
+```
+
+### Minification Options
+
+```typescript
+import { minifySync } from "oxc-minify";
+
+const result = minifySync("app.js", code, {
+  // Enable compression
+  compress: {
+    // Drop console statements
+    dropConsole: false,
+    // Drop debugger statements
+    dropDebugger: true,
+    // Remove unused code
+    deadCode: true,
+    // Treeshaking options
+    treeshake: {
+      // Respect @__PURE__ annotations
+      annotations: true,
+      // Mark specific functions as pure
+      manualPureFunctions: ["myPureFunction"],
+    },
+    // Drop specific labeled statements
+    dropLabels: ["DEV"],
+  },
+  
+  // Enable variable name mangling
+  mangle: true,
+  
+  // Codegen options
+  codegen: {
+    // Remove whitespace
+    removeWhitespace: true,
+  },
+  
+  // Generate source maps
+  sourcemap: true,
+});
+
+console.log("Minified code:", result.code);
+console.log("Source map:", result.map);
+```
+
+### Compression Options
+
+<Tabs>
+  <Tab title="Dead Code Elimination">
+    ```typescript
+    const code = `
+    if (false) {
+      console.log("This code is never executed");
+    }
+    const unused = 42;
+    `;
+
+    const result = minifySync("app.js", code, {
+      compress: {
+        deadCode: true,
+      },
+    });
+
+    console.log(result.code);
+    // Dead code is removed
+    ```
+  </Tab>
+  <Tab title="Pure Annotations">
+    ```typescript
+    const code = `
+    /* @__PURE__ */ expensiveFunction();
+    sideEffectFunction();
+    `;
+
+    const result = minifySync("app.js", code, {
+      compress: {
+        treeshake: {
+          annotations: true,
+        },
+      },
+    });
+
+    console.log(result.code);
+    // @__PURE__ annotated call is removed if result unused
+    ```
+  </Tab>
+  <Tab title="Drop Console">
+    ```typescript
+    const code = `
+    console.log("debug");
+    console.error("error");
+    const value = calculate();
+    `;
+
+    const result = minifySync("app.js", code, {
+      compress: {
+        dropConsole: true,
+      },
+    });
+
+    console.log(result.code);
+    // console statements are removed
+    ```
+  </Tab>
+</Tabs>
+
+### Mangling
+
+```typescript
+import { minifySync } from "oxc-minify";
+
+const code = `
+function calculateTotal(price, quantity) {
+  const subtotal = price * quantity;
+  const tax = subtotal * 0.1;
+  return subtotal + tax;
+}
+`;
+
+const result = minifySync("app.js", code, {
+  mangle: true,
+});
+
+console.log(result.code);
+// Variable names are shortened: calculateTotal(n,t){const o=n*t;return o+o*.1}
+```
+
+### Source Maps
+
+```typescript
+import { minifySync } from "oxc-minify";
+import fs from "fs";
+
+const result = minifySync("app.js", sourceCode, {
+  compress: true,
+  mangle: true,
+  sourcemap: true,
+});
+
+// Write minified code
+fs.writeFileSync("dist/app.min.js", result.code);
+
+// Write source map
+if (result.map) {
+  fs.writeFileSync("dist/app.min.js.map", JSON.stringify(result.map));
+}
+```
+
+### Async Minification
+
+```typescript
+import { minify } from "oxc-minify";
+
+const result = await minify("app.js", code, {
+  compress: true,
+  mangle: true,
+});
+
+console.log(result.code);
+```
+
+## Advanced Usage
+
+### Build Pipeline
+
+```typescript
+import { transformSync } from "oxc-transform";
+import { minifySync } from "oxc-minify";
+import fs from "fs";
+import path from "path";
+
+function buildFile(inputPath: string, outputPath: string) {
+  const source = fs.readFileSync(inputPath, "utf-8");
+  const filename = path.basename(inputPath);
+  
+  // Transform
+  const transformed = transformSync(filename, source, {
+    target: "es2015",
+    jsx: "automatic",
+    sourcemap: true,
+  });
+  
+  if (transformed.errors.length > 0) {
+    console.error("Transform errors:", transformed.errors);
+    process.exit(1);
+  }
+  
+  // Minify
+  const minified = minifySync(filename, transformed.code, {
+    compress: true,
+    mangle: true,
+    sourcemap: true,
+  });
+  
+  if (minified.errors.length > 0) {
+    console.error("Minify errors:", minified.errors);
+    process.exit(1);
+  }
+  
+  // Write output
+  fs.writeFileSync(outputPath, minified.code);
+  if (minified.map) {
+    fs.writeFileSync(`${outputPath}.map`, JSON.stringify(minified.map));
+  }
+  
+  console.log(`✓ Built ${inputPath} → ${outputPath}`);
+}
+
+buildFile("src/app.tsx", "dist/app.min.js");
+```
+
+### Custom Bundler Integration
+
+```typescript
+import { parseSync } from "oxc-parser";
+import { transformSync } from "oxc-transform";
+
+function processModule(filename: string, source: string) {
+  // Parse to analyze dependencies
+  const parseResult = parseSync(filename, source);
+  
+  const dependencies = parseResult.module.staticImports.map((imp) => {
+    const start = imp.moduleRequest.start;
+    const end = imp.moduleRequest.end;
+    return source.slice(start + 1, end - 1); // Extract module path
+  });
+  
+  // Transform the code
+  const transformed = transformSync(filename, source, {
+    target: "es2020",
+  });
+  
+  return {
+    code: transformed.code,
+    dependencies,
+    hasModuleSyntax: parseResult.module.hasModuleSyntax,
+  };
+}
+
+const result = processModule("app.js", `
+import { foo } from "./foo.js";
+import { bar } from "./bar.js";
+export default foo() + bar();
+`);
+
+console.log("Dependencies:", result.dependencies);
+// ["./foo.js", "./bar.js"]
+```
+
+## Performance Tips
+
+<Steps>
+  <Step title="Use Synchronous APIs">
+    For better performance in tight loops, use synchronous APIs (`parseSync`, `transformSync`, `minifySync`).
+  </Step>
+  <Step title="Reuse Options Objects">
+    Create options objects once and reuse them:
+    
+    ```typescript
+    const transformOptions = { target: "es2015", jsx: "automatic" };
+    
+    files.forEach((file) => {
+      transformSync(file.name, file.content, transformOptions);
+    });
+    ```
+  </Step>
+  <Step title="Process in Parallel">
+    Use worker threads or async APIs for parallel processing:
+    
+    ```typescript
+    const results = await Promise.all(
+      files.map((file) => transform(file.name, file.content, options))
+    );
+    ```
+  </Step>
+  <Step title="Enable Only Needed Features">
+    Disable unused transform features for faster processing:
+    
+    ```typescript
+    transformSync(filename, code, {
+      // Only enable what you need
+      typescript: { declaration: undefined }, // Don't generate .d.ts
+      jsx: "preserve", // Don't transform JSX
+    });
+    ```
+  </Step>
+</Steps>
+
+## Error Handling
+
+```typescript
+import { transformSync } from "oxc-transform";
+
+function safeTransform(filename: string, code: string) {
+  try {
+    const result = transformSync(filename, code, {
+      target: "es2015",
+    });
+    
+    if (result.errors.length > 0) {
+      console.error(`Errors in ${filename}:`);
+      result.errors.forEach((err) => {
+        console.error(`  ${err.message}`);
+      });
+      return null;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`Fatal error transforming ${filename}:`, error);
+    return null;
+  }
+}
+```
+
+## Type Definitions
+
+All packages include full TypeScript type definitions:
+
+```typescript
+import type { ParseResult } from "oxc-parser";
+import type { TransformResult, TransformOptions } from "oxc-transform";
+import type { MinifyResult, MinifyOptions } from "oxc-minify";
+```
+
+## See Also
+
+- [Rust Integration](/guide/rust-integration) - Using Oxc from Rust
+- [CLI Usage](/guide/cli-usage) - Command-line tools
+- [Parser API](/api/parser) - Complete API documentation

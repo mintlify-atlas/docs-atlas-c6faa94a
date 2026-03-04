@@ -1,0 +1,745 @@
+---
+title: "Transformer"
+description: "TypeScript, JSX, and modern JavaScript transformation engine"
+icon: "arrows-rotate"
+---
+
+## Overview
+
+The Oxc Transformer is a high-performance code transformation engine that transpiles modern JavaScript and TypeScript to older JavaScript versions. It's designed as a **Babel alternative** with significantly better performance.
+
+<CardGroup cols={2}>
+  <Card title="TypeScript Transpilation" icon="t">
+    Strip TypeScript types and transform TS-specific syntax.
+  </Card>
+  <Card title="JSX/React" icon="react">
+    Transform JSX to JavaScript with React or automatic runtime.
+  </Card>
+  <Card title="ES2015-ES2026" icon="forward">
+    Transpile modern JavaScript to ES5/ES2015 for compatibility.
+  </Card>
+  <Card title="Decorators & Proposals" icon="star">
+    Support for Stage 3 decorators and upcoming features.
+  </Card>
+</CardGroup>
+
+## Features
+
+### TypeScript Transformation
+
+- **Type Stripping**: Remove all TypeScript type annotations
+- **Enum Transpilation**: Convert TypeScript enums to JavaScript
+- **Namespace Support**: Handle TypeScript namespaces
+- **Decorators**: Stage 3 decorator support
+- **Import Type Removal**: Strip type-only imports
+- **JSX in TSX**: Handle JSX in TypeScript files
+
+### JSX Transformation
+
+- **React Classic**: Transform to `React.createElement`
+- **React Automatic**: Modern automatic JSX runtime
+- **React Fast Refresh**: Hot module reloading support
+- **Development Mode**: Add source locations and keys
+- **Fragment Support**: Handle `<>` syntax
+
+### ES2015+ Features
+
+<Tabs>
+  <Tab title="ES2015">
+    - Arrow functions
+    - Classes
+    - Template literals
+    - Destructuring
+    - Spread operator
+    - For-of loops
+    - Block scoping
+  </Tab>
+  
+  <Tab title="ES2016-ES2019">
+    - Exponentiation operator
+    - Async/await
+    - Object rest/spread
+    - Optional catch binding
+    - Nullish coalescing
+    - Optional chaining
+  </Tab>
+  
+  <Tab title="ES2020-ES2026">
+    - Private methods
+    - Class fields
+    - Static blocks
+    - Top-level await
+    - Import assertions
+    - Decorator metadata
+  </Tab>
+</Tabs>
+
+## Node.js API
+
+### Installation
+
+```bash npm
+npm install oxc-transform
+```
+
+### Basic Usage
+
+```typescript
+import { transform } from 'oxc-transform';
+
+const result = transform('source.tsx', sourceCode, {
+  typescript: true,
+  jsx: {
+    runtime: 'automatic'
+  }
+});
+
+console.log(result.code);
+console.log(result.map); // Source map
+```
+
+### Transform Options
+
+```typescript
+interface TransformOptions {
+  /** TypeScript options */
+  typescript?: TypeScriptOptions;
+  
+  /** JSX/React options */
+  jsx?: JsxOptions;
+  
+  /** Target environment */
+  env?: EnvOptions;
+  
+  /** ES2015+ features */
+  es2015?: ES2015Options;
+  es2016?: ES2016Options;
+  es2017?: ES2017Options;
+  // ... up to es2026
+  
+  /** Stage 3 decorators */
+  decorator?: DecoratorOptions;
+  
+  /** Compiler assumptions for smaller output */
+  assumptions?: CompilerAssumptions;
+}
+```
+
+### TypeScript Transformation
+
+```typescript
+import { transform } from 'oxc-transform';
+
+const tsCode = `
+interface User {
+  name: string;
+  age: number;
+}
+
+const greet = (user: User): string => {
+  return \`Hello, \${user.name}!\`;
+};
+
+enum Status {
+  Active,
+  Inactive
+}
+`;
+
+const result = transform('example.ts', tsCode, {
+  typescript: {
+    // Only transform syntax, don't polyfill
+    onlyRemoveTypeImports: true,
+    
+    // Rewrite .ts extensions to .js in imports
+    rewriteImportExtensions: {
+      mode: 'rewrite'
+    }
+  }
+});
+
+console.log(result.code);
+// Output: JavaScript with types removed
+```
+
+### JSX Transformation
+
+<CodeGroup>
+```typescript Automatic Runtime
+import { transform } from 'oxc-transform';
+
+const jsxCode = `
+function Button({ label }) {
+  return <button onClick={() => alert('Clicked!')}>{label}</button>;
+}
+`;
+
+const result = transform('Button.jsx', jsxCode, {
+  jsx: {
+    runtime: 'automatic',  // Modern JSX runtime
+    development: true,     // Add __source and __self
+    importSource: 'react'  // Import from 'react/jsx-runtime'
+  }
+});
+```
+
+```typescript Classic Runtime
+const result = transform('Button.jsx', jsxCode, {
+  jsx: {
+    runtime: 'classic',
+    pragma: 'React.createElement',
+    pragmaFrag: 'React.Fragment'
+  }
+});
+```
+
+```typescript Preact
+const result = transform('Button.jsx', jsxCode, {
+  jsx: {
+    runtime: 'automatic',
+    importSource: 'preact'
+  }
+});
+```
+</CodeGroup>
+
+### Target Environment
+
+```typescript
+import { transform } from 'oxc-transform';
+
+const modernCode = `
+const obj = { ...spread, key: 'value' };
+const arr = [1, 2, 3];
+const sum = arr.reduce((a, b) => a + b, 0);
+`;
+
+// Target specific browsers
+const result = transform('example.js', modernCode, {
+  env: {
+    targets: {
+      chrome: '90',
+      firefox: '88',
+      safari: '14'
+    }
+  }
+});
+
+// Or use browserslist query
+const result2 = transform('example.js', modernCode, {
+  env: {
+    targets: '> 0.25%, not dead'
+  }
+});
+```
+
+### React Fast Refresh
+
+```typescript
+const result = transform('Component.jsx', code, {
+  jsx: {
+    runtime: 'automatic',
+    development: true,
+    refresh: {
+      refreshReg: '$RefreshReg$',
+      refreshSig: '$RefreshSig$'
+    }
+  }
+});
+
+// Use with webpack or vite HMR
+```
+
+## Rust API
+
+### Adding to Cargo.toml
+
+```toml Cargo.toml
+[dependencies]
+oxc_transformer = "0.37"
+oxc_allocator = "0.37"
+oxc_parser = "0.37"
+oxc_span = "0.37"
+```
+
+### Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+use oxc_transformer::{Transformer, TransformOptions};
+use oxc_semantic::SemanticBuilder;
+
+fn main() {
+    let allocator = Allocator::default();
+    let source_text = r#"
+        interface User {
+            name: string;
+        }
+        const greet = (user: User) => `Hello, ${user.name}!`;
+    "#;
+    let source_type = SourceType::ts();
+    let source_path = std::path::Path::new("example.ts");
+    
+    // Parse
+    let ret = Parser::new(&allocator, source_text, source_type).parse();
+    let mut program = ret.program;
+    
+    // Build semantic information
+    let semantic = SemanticBuilder::new().build(&program).semantic;
+    let scoping = semantic.into_scoping();
+    
+    // Transform
+    let options = TransformOptions::default();
+    let transformer = Transformer::new(&allocator, source_path, &options);
+    let result = transformer.build_with_scoping(scoping, &mut program);
+    
+    // Generate code
+    use oxc_codegen::{Codegen, CodegenOptions};
+    let codegen_options = CodegenOptions::default();
+    let code = Codegen::new().with_options(codegen_options).build(&program).code;
+    
+    println!("{}", code);
+}
+```
+
+### TypeScript Options
+
+```rust
+use oxc_transformer::{TransformOptions, TypeScriptOptions, RewriteExtensionsMode};
+
+let options = TransformOptions {
+    typescript: TypeScriptOptions {
+        /// Rewrite `.ts`/`.mts`/`.cts` extensions to `.js`/`.mjs`/`.cjs`
+        rewrite_import_extensions: Some(RewriteExtensionsMode::Rewrite),
+        
+        /// Only remove type imports, keep value imports
+        only_remove_type_imports: true,
+        
+        ..TypeScriptOptions::default()
+    },
+    ..TransformOptions::default()
+};
+```
+
+### JSX Options
+
+```rust
+use oxc_transformer::{JsxOptions, JsxRuntime, ReactRefreshOptions};
+
+let options = TransformOptions {
+    jsx: JsxOptions {
+        runtime: JsxRuntime::Automatic,
+        development: true,
+        import_source: Some("react".to_string()),
+        
+        /// React Fast Refresh
+        refresh: Some(ReactRefreshOptions {
+            refresh_reg: "$RefreshReg$".to_string(),
+            refresh_sig: "$RefreshSig$".to_string(),
+            emit_full_signatures: false,
+        }),
+        
+        ..JsxOptions::default()
+    },
+    ..TransformOptions::default()
+};
+```
+
+### Target Environment
+
+```rust
+use oxc_transformer::{EnvOptions, EngineTargets};
+
+let options = TransformOptions {
+    env: EnvOptions {
+        targets: EngineTargets {
+            chrome: Some("90".to_string()),
+            firefox: Some("88".to_string()),
+            safari: Some("14".to_string()),
+            ..EngineTargets::default()
+        },
+        ..EnvOptions::default()
+    },
+    ..TransformOptions::default()
+};
+```
+
+## Transformation Examples
+
+### TypeScript to JavaScript
+
+<CodeGroup>
+```typescript Input
+interface Point {
+  x: number;
+  y: number;
+}
+
+class Vector implements Point {
+  constructor(
+    public x: number,
+    public y: number
+  ) {}
+  
+  magnitude(): number {
+    return Math.sqrt(this.x ** 2 + this.y ** 2);
+  }
+}
+
+const v: Vector = new Vector(3, 4);
+console.log(v.magnitude());
+```
+
+```javascript Output
+class Vector {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+  
+  magnitude() {
+    return Math.sqrt(this.x ** 2 + this.y ** 2);
+  }
+}
+
+const v = new Vector(3, 4);
+console.log(v.magnitude());
+```
+</CodeGroup>
+
+### JSX to JavaScript
+
+<CodeGroup>
+```jsx Input (Automatic Runtime)
+function TodoList({ items }) {
+  return (
+    <ul className="todo-list">
+      {items.map(item => (
+        <li key={item.id}>
+          <span>{item.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+```javascript Output
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+
+function TodoList({ items }) {
+  return _jsx("ul", {
+    className: "todo-list",
+    children: items.map(item => 
+      _jsxs("li", {
+        children: _jsx("span", {
+          children: item.text
+        })
+      }, item.id)
+    )
+  });
+}
+```
+</CodeGroup>
+
+### Modern JavaScript to ES5
+
+<CodeGroup>
+```javascript Input (ES2020)
+const data = {
+  user: {
+    name: 'John',
+    age: 30
+  }
+};
+
+const userName = data?.user?.name ?? 'Anonymous';
+
+const numbers = [1, 2, 3];
+const doubled = numbers.map(n => n * 2);
+
+class Counter {
+  #count = 0;
+  
+  increment() {
+    this.#count++;
+  }
+  
+  get value() {
+    return this.#count;
+  }
+}
+```
+
+```javascript Output (ES5)
+var data = {
+  user: {
+    name: 'John',
+    age: 30
+  }
+};
+
+var _data_user, _data_user_name;
+var userName = (_data_user_name = (_data_user = data.user) === null || 
+  _data_user === void 0 ? void 0 : _data_user.name) !== null && 
+  _data_user_name !== void 0 ? _data_user_name : 'Anonymous';
+
+var numbers = [1, 2, 3];
+var doubled = numbers.map(function(n) {
+  return n * 2;
+});
+
+var Counter = function() {
+  var _count = new WeakMap();
+  
+  function Counter() {
+    _count.set(this, 0);
+  }
+  
+  Counter.prototype.increment = function() {
+    var value = _count.get(this);
+    _count.set(this, value + 1);
+  };
+  
+  Object.defineProperty(Counter.prototype, "value", {
+    get: function() {
+      return _count.get(this);
+    }
+  });
+  
+  return Counter;
+}();
+```
+</CodeGroup>
+
+## Advanced Features
+
+### Compiler Assumptions
+
+Optimize output with compiler assumptions:
+
+```typescript
+const result = transform('example.js', code, {
+  assumptions: {
+    noDocumentAll: true,
+    noClassCalls: true,
+    noNewArrows: true,
+    pureGetters: true,
+    setPublicClassFields: true
+  }
+});
+```
+
+### Helper Functions
+
+Control how helpers are imported:
+
+```typescript
+const result = transform('example.js', code, {
+  helper: {
+    mode: 'external',  // or 'inline'
+    importSource: '@babel/runtime'
+  }
+});
+```
+
+### Decorator Support
+
+```typescript
+const decoratorCode = `
+@sealed
+class Example {
+  @logged
+  method() {}
+}
+`;
+
+const result = transform('example.ts', decoratorCode, {
+  decorator: {
+    version: '2023-05'  // Stage 3 decorators
+  }
+});
+```
+
+## Framework Integrations
+
+### Vite Plugin
+
+```typescript vite.config.ts
+import { defineConfig } from 'vite';
+import oxc from 'vite-plugin-oxc';
+
+export default defineConfig({
+  plugins: [
+    oxc({
+      typescript: true,
+      jsx: {
+        runtime: 'automatic'
+      }
+    })
+  ]
+});
+```
+
+### Rollup Plugin
+
+```typescript rollup.config.js
+import oxc from '@rollup/plugin-oxc';
+
+export default {
+  plugins: [
+    oxc({
+      include: ['**/*.ts', '**/*.tsx'],
+      typescript: {
+        declaration: true
+      }
+    })
+  ]
+};
+```
+
+### Webpack Loader
+
+```javascript webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx|ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'oxc-loader',
+          options: {
+            typescript: true,
+            jsx: {
+              runtime: 'automatic'
+            }
+          }
+        }
+      }
+    ]
+  }
+};
+```
+
+## Performance
+
+### Benchmarks
+
+The transformer is significantly faster than Babel:
+
+| Tool | Time (1000 files) |
+|------|------------------|
+| **Oxc Transform** | **~1s** |
+| SWC | ~2s |
+| Babel | ~15s |
+
+### Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Disable Unnecessary Features" icon="toggle-off">
+    Only enable transformations you need for your target environment.
+  </Card>
+  <Card title="Use Assumptions" icon="thought-bubble">
+    Compiler assumptions reduce output size and improve performance.
+  </Card>
+  <Card title="Parallel Processing" icon="diagram-project">
+    Transform files in parallel for maximum throughput.
+  </Card>
+  <Card title="Cache Results" icon="database">
+    Cache transformation results when possible.
+  </Card>
+</CardGroup>
+
+## Migration from Babel
+
+### Configuration Comparison
+
+<CodeGroup>
+```json Babel
+{
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": "> 0.25%, not dead"
+    }],
+    "@babel/preset-typescript",
+    ["@babel/preset-react", {
+      "runtime": "automatic"
+    }]
+  ]
+}
+```
+
+```typescript Oxc
+transform('example.tsx', code, {
+  env: {
+    targets: '> 0.25%, not dead'
+  },
+  typescript: true,
+  jsx: {
+    runtime: 'automatic'
+  }
+})
+```
+</CodeGroup>
+
+### Plugin Equivalents
+
+| Babel Plugin | Oxc Option |
+|--------------|------------|
+| `@babel/preset-env` | `env: { targets }` |
+| `@babel/preset-typescript` | `typescript: true` |
+| `@babel/preset-react` | `jsx: { runtime }` |
+| `@babel/plugin-transform-runtime` | `helper: { mode }` |
+| `@babel/plugin-proposal-decorators` | `decorator: {}` |
+
+## Limitations
+
+<Warning>
+- **No Babel plugin API**: Can't use Babel plugins
+- **Limited customization**: Some advanced Babel features not available
+- **Breaking changes**: API may change in major versions
+</Warning>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/oxc-project/oxc">
+    Source code and examples
+  </Card>
+  <Card title="Rust Docs" icon="rust" href="https://docs.rs/oxc_transformer">
+    Complete Rust API documentation
+  </Card>
+  <Card title="npm Package" icon="npm" href="https://www.npmjs.com/package/oxc-transform">
+    Node.js bindings
+  </Card>
+  <Card title="Playground" icon="play" href="https://oxc.rs/playground">
+    Try transformations online
+  </Card>
+</CardGroup>
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Can I use Babel plugins with Oxc transformer?">
+    No, Oxc doesn't support Babel's plugin API. However, most common transformations are built-in.
+  </Accordion>
+  
+  <Accordion title="Is the output identical to Babel?">
+    The output is functionally equivalent but may differ in formatting and variable naming. The transformer aims for correctness, not byte-for-byte compatibility.
+  </Accordion>
+  
+  <Accordion title="Does it support decorator metadata?">
+    Yes, Stage 3 decorators with metadata are supported.
+  </Accordion>
+  
+  <Accordion title="Can I use it with Create React App?">
+    Not directly, but you can eject and configure webpack to use oxc-loader.
+  </Accordion>
+  
+  <Accordion title="Does it generate source maps?">
+    Yes, source maps are generated automatically and included in the output.
+  </Accordion>
+</AccordionGroup>

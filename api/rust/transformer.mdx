@@ -1,0 +1,494 @@
+---
+title: oxc_transformer
+description: JavaScript and TypeScript code transformation API reference
+---
+
+Oxc's transformer provides Babel-compatible code transformations including TypeScript stripping, JSX transformation, and ES2015+ downleveling.
+
+## Features
+
+- TypeScript type stripping
+- JSX/TSX transformation (React, Preact, automatic runtime)
+- ES2015-ES2026 syntax downleveling
+- Decorators (Stage 3 proposal)
+- Environment-based transforms with browserslist
+- React Refresh integration
+- Helper function injection
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxc_transformer = "0.116.0"
+oxc_parser = "0.116.0"
+oxc_semantic = "0.116.0"
+oxc_allocator = "0.116.0"
+oxc_codegen = "0.116.0"
+```
+
+## Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::Codegen;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+use oxc_transformer::{TransformOptions, Transformer};
+use std::path::Path;
+
+let allocator = Allocator::default();
+let source = "const x: number = 42;";
+let source_type = SourceType::ts();
+let path = Path::new("test.ts");
+
+// Parse
+let parsed = Parser::new(&allocator, source, source_type).parse();
+let mut program = parsed.program;
+
+// Build semantic information
+let semantic = SemanticBuilder::new()
+    .with_excess_capacity(2.0)  // Reserve space for new bindings
+    .build(&program);
+let scoping = semantic.semantic.into_scoping();
+
+// Transform
+let options = TransformOptions::default();
+let ret = Transformer::new(&allocator, path, &options)
+    .build_with_scoping(scoping, &mut program);
+
+// Generate code
+let output = Codegen::new().build(&program).code;
+println!("{}", output);  // const x = 42;
+```
+
+## Core Types
+
+### Transformer
+
+<ParamField path="Transformer" type="struct">
+  Main transformation pipeline.
+</ParamField>
+
+**Constructor:**
+
+```rust
+impl<'a> Transformer<'a> {
+    pub fn new(
+        allocator: &'a Allocator,
+        source_path: &Path,
+        options: &TransformOptions
+    ) -> Self;
+}
+```
+
+<ParamField path="allocator" type="&'a Allocator" required>
+  Memory arena for allocating transformed AST nodes.
+</ParamField>
+
+<ParamField path="source_path" type="&Path" required>
+  Path to the source file being transformed. Used for source maps and module resolution.
+</ParamField>
+
+<ParamField path="options" type="&TransformOptions" required>
+  Transformation configuration.
+</ParamField>
+
+**Methods:**
+
+```rust
+impl<'a> Transformer<'a> {
+    pub fn build_with_scoping(
+        self,
+        scoping: Scoping,
+        program: &mut Program<'a>
+    ) -> TransformerReturn;
+}
+```
+
+### TransformOptions
+
+<ParamField path="TransformOptions" type="struct">
+  Configuration for all transformations.
+</ParamField>
+
+```rust
+pub struct TransformOptions {
+    pub typescript: TypeScriptOptions,
+    pub jsx: JsxOptions,
+    pub env: EnvOptions,
+    pub decorator: DecoratorOptions,
+    pub proposals: ProposalOptions,
+    pub helper_loader: HelperLoaderOptions,
+}
+```
+
+**Convenience Methods:**
+
+```rust
+impl TransformOptions {
+    // Enable all available transforms
+    pub fn enable_all() -> Self;
+    
+    // Create from browserslist target
+    pub fn from_target(target: &str) -> Result<Self>;
+    
+    // From Babel options
+    pub fn from(babel_options: &BabelOptions) -> Self;
+}
+```
+
+### TransformerReturn
+
+<ParamField path="TransformerReturn" type="struct">
+  Result of transformation.
+</ParamField>
+
+```rust
+pub struct TransformerReturn {
+    pub errors: Vec<OxcDiagnostic>,
+    pub scoping: Scoping,
+    pub helpers_used: FxHashMap<Helper, String>,  // Deprecated
+}
+```
+
+<ParamField path="errors" type="Vec<OxcDiagnostic>">
+  Diagnostics produced during transformation.
+</ParamField>
+
+<ParamField path="scoping" type="Scoping">
+  Updated semantic scoping after transformations.
+</ParamField>
+
+## TypeScript Transformation
+
+### TypeScriptOptions
+
+```rust
+use oxc_transformer::{TransformOptions, TypeScriptOptions};
+
+let options = TransformOptions {
+    typescript: TypeScriptOptions {
+        // Remove all type annotations
+        ..Default::default()
+    },
+    ..Default::default()
+};
+```
+
+<ParamField path="allow_declare_fields" type="bool" default="false">
+  Keep class fields with `declare` keyword.
+</ParamField>
+
+<ParamField path="remove_class_fields_without_initializer" type="bool" default="false">
+  Remove class fields that don't have an initializer.
+</ParamField>
+
+### Example: Strip TypeScript Types
+
+```rust
+let allocator = Allocator::default();
+let source = r#"
+    interface User {
+        name: string;
+        age: number;
+    }
+    const user: User = { name: "Alice", age: 30 };
+"#;
+
+let parsed = Parser::new(&allocator, source, SourceType::ts()).parse();
+let mut program = parsed.program;
+let semantic = SemanticBuilder::new().build(&program).semantic;
+
+let options = TransformOptions::default();
+let ret = Transformer::new(&allocator, Path::new("test.ts"), &options)
+    .build_with_scoping(semantic.into_scoping(), &mut program);
+
+let output = Codegen::new().build(&program).code;
+// Output: const user = { name: "Alice", age: 30 };
+```
+
+## JSX Transformation
+
+### JsxOptions
+
+```rust
+use oxc_transformer::{JsxOptions, JsxRuntime};
+
+let jsx_options = JsxOptions {
+    runtime: JsxRuntime::Automatic,  // Use React 17+ automatic runtime
+    import_source: Some("react".to_string()),
+    pragma: Some("h".to_string()),  // For Preact
+    pragma_frag: Some("Fragment".to_string()),
+    ..Default::default()
+};
+
+let options = TransformOptions {
+    jsx: jsx_options,
+    ..Default::default()
+};
+```
+
+<ParamField path="runtime" type="JsxRuntime">
+  JSX transform mode: `Classic` (React.createElement) or `Automatic` (jsx-runtime).
+</ParamField>
+
+<ParamField path="import_source" type="Option<String>">
+  Module to import jsx functions from (default: "react").
+</ParamField>
+
+<ParamField path="pragma" type="Option<String>">
+  Function to call for JSX elements (classic runtime, e.g., "h" for Preact).
+</ParamField>
+
+<ParamField path="pragma_frag" type="Option<String>">
+  Function to call for fragments (classic runtime).
+</ParamField>
+
+### Example: Transform JSX
+
+```rust
+use oxc_transformer::{JsxOptions, JsxRuntime};
+
+let allocator = Allocator::default();
+let source = "const App = () => <div>Hello</div>;";
+
+let parsed = Parser::new(&allocator, source, SourceType::jsx()).parse();
+let mut program = parsed.program;
+let semantic = SemanticBuilder::new().build(&program).semantic;
+
+let options = TransformOptions {
+    jsx: JsxOptions {
+        runtime: JsxRuntime::Classic,
+        pragma: Some("React.createElement".to_string()),
+        ..Default::default()
+    },
+    ..Default::default()
+};
+
+let ret = Transformer::new(&allocator, Path::new("App.jsx"), &options)
+    .build_with_scoping(semantic.into_scoping(), &mut program);
+
+let output = Codegen::new().build(&program).code;
+// Output: const App = () => React.createElement("div", null, "Hello");
+```
+
+## Environment-Based Transforms
+
+### EnvOptions
+
+Transform based on browser/runtime targets:
+
+```rust
+use oxc_transformer::{EnvOptions, TransformOptions};
+
+// From browserslist query
+let env = EnvOptions::from_browserslist_query("last 2 versions")?;
+
+let options = TransformOptions {
+    env,
+    ..Default::default()
+};
+```
+
+<ParamField path="targets" type="EngineTargets">
+  Specific browser/runtime versions to target.
+</ParamField>
+
+### Example: Target Specific Browsers
+
+```rust
+let allocator = Allocator::default();
+let source = "const x = a ?? b;";
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let mut program = parsed.program;
+let semantic = SemanticBuilder::new().build(&program).semantic;
+
+// Transform for older browsers that don't support nullish coalescing
+let env = EnvOptions::from_browserslist_query("ie 11")?;
+let options = TransformOptions {
+    env,
+    ..Default::default()
+};
+
+let ret = Transformer::new(&allocator, Path::new("test.js"), &options)
+    .build_with_scoping(semantic.into_scoping(), &mut program);
+
+let output = Codegen::new().build(&program).code;
+// Output: const x = a !== null && a !== void 0 ? a : b;
+```
+
+## ES2015+ Transforms
+
+### ES2015Options
+
+```rust
+use oxc_transformer::{ES2015Options, ArrowFunctionsOptions};
+
+let es2015 = ES2015Options {
+    arrow_functions: Some(ArrowFunctionsOptions {
+        spec: false,  // Don't use .bind() for this binding
+    }),
+};
+```
+
+Supported ES2015+ features:
+- Arrow functions
+- Classes
+- Template literals
+- Destructuring
+- Spread/rest operators
+- Block scoping (let/const)
+- And more...
+
+### Example: ES2015 Downleveling
+
+```rust
+let source = "const arrow = (x) => x * 2;";
+
+let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+let mut program = parsed.program;
+let semantic = SemanticBuilder::new().build(&program).semantic;
+
+let options = TransformOptions::enable_all();
+let ret = Transformer::new(&allocator, Path::new("test.js"), &options)
+    .build_with_scoping(semantic.into_scoping(), &mut program);
+
+let output = Codegen::new().build(&program).code;
+// Output: const arrow = function(x) { return x * 2; };
+```
+
+## Decorators
+
+### DecoratorOptions
+
+```rust
+use oxc_transformer::DecoratorOptions;
+
+let options = TransformOptions {
+    decorator: DecoratorOptions {
+        version: "2023-11".to_string(),
+    },
+    ..Default::default()
+};
+```
+
+Supports Stage 3 decorators proposal.
+
+## React Refresh
+
+### ReactRefreshOptions
+
+```rust
+use oxc_transformer::{JsxOptions, ReactRefreshOptions};
+
+let jsx = JsxOptions {
+    refresh: Some(ReactRefreshOptions {
+        refresh_reg: Some("$RefreshReg$".to_string()),
+        refresh_sig: Some("$RefreshSig$".to_string()),
+        ..Default::default()
+    }),
+    ..Default::default()
+};
+```
+
+Enables React Fast Refresh transformations for development.
+
+## Helper Functions
+
+### HelperLoaderOptions
+
+```rust
+use oxc_transformer::{HelperLoaderMode, HelperLoaderOptions};
+
+let helper_loader = HelperLoaderOptions {
+    mode: HelperLoaderMode::External,  // Import from package
+    // Or: HelperLoaderMode::Inline  // Inline helper functions
+};
+```
+
+<ParamField path="mode" type="HelperLoaderMode">
+  How to inject helper functions: `Inline` (duplicate in each file) or `External` (import from package).
+</ParamField>
+
+## Complete Example
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::Codegen;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+use oxc_transformer::{
+    EnvOptions, JsxOptions, JsxRuntime, TransformOptions, Transformer
+};
+use std::path::Path;
+
+fn transform_tsx_to_js(source: &str) -> String {
+    let allocator = Allocator::default();
+    let path = Path::new("App.tsx");
+    let source_type = SourceType::tsx();
+    
+    // Parse
+    let parsed = Parser::new(&allocator, source, source_type).parse();
+    let mut program = parsed.program;
+    
+    // Build semantic info with extra capacity for transforms
+    let semantic = SemanticBuilder::new()
+        .with_excess_capacity(2.0)
+        .build(&program);
+    
+    // Configure transforms
+    let env = EnvOptions::from_browserslist_query("last 2 versions").unwrap();
+    let options = TransformOptions {
+        typescript: Default::default(),
+        jsx: JsxOptions {
+            runtime: JsxRuntime::Automatic,
+            ..Default::default()
+        },
+        env,
+        ..Default::default()
+    };
+    
+    // Transform
+    let ret = Transformer::new(&allocator, path, &options)
+        .build_with_scoping(semantic.semantic.into_scoping(), &mut program);
+    
+    // Handle errors
+    for error in ret.errors {
+        eprintln!("{:?}", error);
+    }
+    
+    // Generate output
+    Codegen::new().build(&program).code
+}
+
+let tsx_source = r#"
+    const Greeting: React.FC<{name: string}> = ({name}) => {
+        return <div>Hello, {name}!</div>;
+    };
+"#;
+
+let js_output = transform_tsx_to_js(tsx_source);
+println!("{}", js_output);
+```
+
+## Performance Tips
+
+- Always use `SemanticBuilder::with_excess_capacity(2.0)` before transforming to avoid reallocations
+- Reuse allocators when transforming multiple files by calling `allocator.reset()`
+- The transformer modifies the AST in-place for efficiency
+
+## Related
+
+- [oxc_parser](/api/rust/parser) - Parse JavaScript/TypeScript
+- [oxc_semantic](/api/rust/semantic) - Required for transformation
+- [oxc_codegen](/api/rust/codegen) - Generate code after transformation
+- [Core Concepts: Transformer](/learn/transformer) - Architecture details
+
+## API Documentation
+
+For complete API documentation, see [docs.rs/oxc_transformer](https://docs.rs/oxc_transformer).

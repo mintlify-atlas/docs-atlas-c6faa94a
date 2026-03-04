@@ -1,0 +1,448 @@
+---
+title: oxc_minifier
+description: JavaScript and TypeScript minification API reference
+---
+
+Oxc's minifier provides high-performance code minification with comprehensive optimization passes focused on achieving maximum compression while maintaining correctness.
+
+## Features
+
+- Maximum compression through fixed-point iteration
+- 17+ transformation passes and growing
+- Variable name mangling
+- Dead code elimination (DCE)
+- Peephole optimizations
+- Tree shaking
+- 100% correctness with extensive testing
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+oxc_minifier = "0.116.0"
+oxc_parser = "0.116.0"
+oxc_codegen = "0.116.0"
+oxc_allocator = "0.116.0"
+oxc_span = "0.116.0"
+```
+
+## Basic Usage
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::{Codegen, CodegenOptions};
+use oxc_minifier::{Minifier, MinifierOptions};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source = "const x = 1 + 1; console.log(x);";
+let source_type = SourceType::mjs();
+
+// Parse
+let ret = Parser::new(&allocator, source, source_type).parse();
+let mut program = ret.program;
+
+// Minify
+let options = MinifierOptions::default();
+let ret = Minifier::new(options).minify(&allocator, &mut program);
+
+// Generate minified code
+let minified = Codegen::new()
+    .with_options(CodegenOptions::minify())
+    .with_scoping(ret.scoping)
+    .build(&program)
+    .code;
+
+println!("{}", minified);  // const x=2;console.log(x);
+```
+
+## Core Types
+
+### Minifier
+
+<ParamField path="Minifier" type="struct">
+  Main minification engine.
+</ParamField>
+
+**Constructor:**
+
+```rust
+impl Minifier {
+    pub fn new(options: MinifierOptions) -> Self;
+}
+```
+
+**Methods:**
+
+```rust
+impl Minifier {
+    // Full minification (compress + mangle)
+    pub fn minify(
+        self,
+        allocator: &'a Allocator,
+        program: &mut Program<'a>
+    ) -> MinifierReturn;
+    
+    // Dead code elimination only
+    pub fn dce(
+        self,
+        allocator: &'a Allocator,
+        program: &mut Program<'a>
+    ) -> MinifierReturn;
+}
+```
+
+### MinifierOptions
+
+<ParamField path="MinifierOptions" type="struct">
+  Configuration for minification.
+</ParamField>
+
+```rust
+pub struct MinifierOptions {
+    pub mangle: Option<MangleOptions>,
+    pub compress: Option<CompressOptions>,
+}
+```
+
+<ParamField path="mangle" type="Option<MangleOptions>">
+  Variable name mangling configuration. Set to `None` to disable mangling.
+</ParamField>
+
+<ParamField path="compress" type="Option<CompressOptions>">
+  Code compression configuration. Set to `None` to disable compression.
+</ParamField>
+
+**Defaults:**
+
+```rust
+impl Default for MinifierOptions {
+    fn default() -> Self {
+        Self {
+            mangle: Some(MangleOptions::default()),
+            compress: Some(CompressOptions::default()),
+        }
+    }
+}
+```
+
+### MinifierReturn
+
+<ParamField path="MinifierReturn" type="struct">
+  Result of minification.
+</ParamField>
+
+```rust
+pub struct MinifierReturn {
+    pub scoping: Option<Scoping>,
+    pub class_private_mappings: Option<IndexVec<ClassId, FxHashMap<String, CompactStr>>>,
+    pub iterations: u8,
+}
+```
+
+<ParamField path="scoping" type="Option<Scoping>">
+  Updated semantic scoping after minification. Pass to codegen for correct output.
+</ParamField>
+
+<ParamField path="class_private_mappings" type="Option<...>">
+  Mappings of mangled private class member names.
+</ParamField>
+
+<ParamField path="iterations" type="u8">
+  Number of compression iterations performed. Useful for debugging performance.
+</ParamField>
+
+## Compression Options
+
+### CompressOptions
+
+```rust
+use oxc_minifier::CompressOptions;
+
+let compress = CompressOptions {
+    max_iterations: Some(10),
+    treeshake: true,
+    ..CompressOptions::default()
+};
+```
+
+<ParamField path="max_iterations" type="Option<u8>">
+  Maximum compression passes. More iterations = smaller output but slower. Default: continue until no changes.
+</ParamField>
+
+<ParamField path="treeshake" type="bool" default="true">
+  Enable tree-shaking to remove unused code.
+</ParamField>
+
+**Presets:**
+
+```rust
+impl CompressOptions {
+    // Default balanced settings
+    pub fn default() -> Self;
+    
+    // Maximum compression (slower)
+    pub fn smallest() -> Self;
+    
+    // Dead code elimination only
+    pub fn dce() -> Self;
+}
+```
+
+## Mangling Options
+
+### MangleOptions
+
+```rust
+use oxc_minifier::MangleOptions;
+
+let mangle = MangleOptions {
+    top_level: true,
+    keep_names: MangleOptionsKeepNames::default(),
+    ..Default::default()
+};
+```
+
+<ParamField path="top_level" type="bool" default="false">
+  Mangle top-level variable names. Enable for modules, disable for scripts.
+</ParamField>
+
+<ParamField path="keep_names" type="MangleOptionsKeepNames">
+  Configure which names to preserve from mangling.
+</ParamField>
+
+### MangleOptionsKeepNames
+
+```rust
+use oxc_minifier::MangleOptionsKeepNames;
+
+let keep_names = MangleOptionsKeepNames {
+    keep_class_names: vec!["MyClass".to_string()],
+    keep_fn_names: vec!["myFunction".to_string()],
+};
+```
+
+## Examples
+
+### Basic Minification
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_codegen::{Codegen, CodegenOptions};
+use oxc_minifier::{Minifier, MinifierOptions};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
+
+fn minify_code(source: &str) -> String {
+    let allocator = Allocator::default();
+    let source_type = SourceType::default();
+    
+    let ret = Parser::new(&allocator, source, source_type).parse();
+    let mut program = ret.program;
+    
+    let options = MinifierOptions::default();
+    let ret = Minifier::new(options).minify(&allocator, &mut program);
+    
+    Codegen::new()
+        .with_options(CodegenOptions::minify())
+        .with_scoping(ret.scoping)
+        .build(&program)
+        .code
+}
+
+let code = "const x = 1 + 2; console.log(x);";
+let minified = minify_code(code);
+assert_eq!(minified, "console.log(3);\n");
+```
+
+### Compression Only (No Mangling)
+
+```rust
+let options = MinifierOptions {
+    mangle: None,  // Disable mangling
+    compress: Some(CompressOptions::default()),
+};
+
+let ret = Minifier::new(options).minify(&allocator, &mut program);
+```
+
+### Mangling Only (No Compression)
+
+```rust
+let options = MinifierOptions {
+    mangle: Some(MangleOptions::default()),
+    compress: None,  // Disable compression
+};
+
+let ret = Minifier::new(options).minify(&allocator, &mut program);
+```
+
+### Dead Code Elimination
+
+```rust
+let options = MinifierOptions {
+    mangle: None,
+    compress: Some(CompressOptions::dce()),
+};
+
+let ret = Minifier::new(options).dce(&allocator, &mut program);
+
+// Or use the convenience method:
+let ret = Minifier::new(options).dce(&allocator, &mut program);
+```
+
+### Maximum Compression
+
+```rust
+let options = MinifierOptions {
+    mangle: Some(MangleOptions {
+        top_level: true,
+        ..Default::default()
+    }),
+    compress: Some(CompressOptions::smallest()),
+};
+
+let ret = Minifier::new(options).minify(&allocator, &mut program);
+```
+
+### With Source Maps
+
+```rust
+use oxc_codegen::{Codegen, CodegenOptions};
+use std::path::PathBuf;
+
+let ret = Minifier::new(options).minify(&allocator, &mut program);
+
+let codegen_options = CodegenOptions {
+    minify: true,
+    source_map_path: Some(PathBuf::from("output.js.map")),
+    ..Default::default()
+};
+
+let output = Codegen::new()
+    .with_options(codegen_options)
+    .with_scoping(ret.scoping)
+    .build(&program);
+
+std::fs::write("output.js", output.code)?;
+if let Some(map) = output.map {
+    std::fs::write("output.js.map", map.to_json_string())?;
+}
+```
+
+### Preserve Specific Names
+
+```rust
+use oxc_minifier::{MangleOptions, MangleOptionsKeepNames};
+
+let mangle = MangleOptions {
+    keep_names: MangleOptionsKeepNames {
+        keep_class_names: vec!["Component".to_string()],
+        keep_fn_names: vec!["main".to_string()],
+    },
+    ..Default::default()
+};
+
+let options = MinifierOptions {
+    mangle: Some(mangle),
+    compress: Some(CompressOptions::default()),
+};
+```
+
+### Limiting Iterations
+
+```rust
+let compress = CompressOptions {
+    max_iterations: Some(5),  // Stop after 5 passes
+    ..CompressOptions::default()
+};
+
+let options = MinifierOptions {
+    mangle: Some(MangleOptions::default()),
+    compress: Some(compress),
+};
+
+let ret = Minifier::new(options).minify(&allocator, &mut program);
+println!("Completed in {} iterations", ret.iterations);
+```
+
+### Idempotency Testing
+
+```rust
+fn test_idempotency(source: &str) {
+    let mut allocator = Allocator::default();
+    let options = MinifierOptions::default();
+    
+    // First pass
+    let parsed = Parser::new(&allocator, source, SourceType::default()).parse();
+    let mut program = parsed.program;
+    let ret1 = Minifier::new(options.clone()).minify(&allocator, &mut program);
+    let output1 = Codegen::new()
+        .with_options(CodegenOptions::minify())
+        .with_scoping(ret1.scoping)
+        .build(&program)
+        .code;
+    
+    // Second pass
+    allocator.reset();
+    let parsed = Parser::new(&allocator, &output1, SourceType::default()).parse();
+    let mut program = parsed.program;
+    let ret2 = Minifier::new(options).minify(&allocator, &mut program);
+    let output2 = Codegen::new()
+        .with_options(CodegenOptions::minify())
+        .with_scoping(ret2.scoping)
+        .build(&program)
+        .code;
+    
+    assert_eq!(output1, output2, "Output should be idempotent");
+}
+```
+
+## Optimization Passes
+
+The minifier applies numerous optimization techniques:
+
+- **Constant folding**: `1 + 2` → `3`
+- **Dead code elimination**: Remove unreachable code
+- **Expression simplification**: `!!x` → `x` for booleans
+- **Conditional collapsing**: `if (true) x;` → `x;`
+- **Boolean optimization**: `x === true` → `x`
+- **Sequence optimization**: Combine expressions
+- **Template literal folding**: `` `hello ${x}` `` → `"hello " + x`
+- **Property access optimization**: `x["prop"]` → `x.prop`
+- **Function inlining**: Inline simple functions
+- **Variable merging**: Combine declarations
+- **And many more...
+
+## Performance
+
+The minifier uses several techniques for speed:
+
+- **Fixed-point iteration**: Repeats passes until no changes
+- **Efficient data structures**: Compact AST representation
+- **In-place modification**: No unnecessary allocations
+- **Parallel opportunities**: Independent optimizations can run concurrently
+
+## Safety and Correctness
+
+The minifier is extensively tested:
+
+- **Test262**: ECMAScript conformance suite
+- **Babel tests**: Parser and transformation tests
+- **TypeScript tests**: Type system edge cases
+- **Idempotency checks**: Output should be stable
+- **Snapshot tests**: Regression prevention
+
+## Related
+
+- [oxc_parser](/api/rust/parser) - Parse JavaScript/TypeScript
+- [oxc_codegen](/api/rust/codegen) - Generate minified output
+- [oxc_mangler](https://docs.rs/oxc_mangler) - Variable name mangling
+- [Core Concepts: Minifier](/learn/minifier) - Architecture details
+
+## API Documentation
+
+For complete API documentation, see [docs.rs/oxc_minifier](https://docs.rs/oxc_minifier).

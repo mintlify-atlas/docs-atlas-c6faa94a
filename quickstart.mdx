@@ -1,80 +1,489 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get started with Oxc in minutes - lint your first project with oxlint
 ---
 
-## Get started in three steps
+Get up and running with Oxc's linter in under a minute.
 
-Get your documentation site running locally and make your first customization.
+## Run oxlint Immediately
 
-### Step 1: Set up your local environment
+The fastest way to try oxlint is to run it directly with npx:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+npx oxlint@latest
+```
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This will:
+- Download and run the latest version of oxlint
+- Scan your current directory for JavaScript and TypeScript files
+- Report any issues found with sensible default rules
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+No installation or configuration required. oxlint works out of the box with intelligent defaults.
 </Note>
+
+## Example Output
+
+Here's what you might see when running oxlint on a project:
+
+```bash Terminal
+$ npx oxlint@latest
+
+  eslint(no-debugger): Unexpected 'debugger' statement
+    ╭─[src/app.ts:15:3]
+ 14 │   if (isProduction) {
+ 15 │     debugger;
+    ·     ────┬───
+    ·         ╰── Remove this debugger statement
+ 16 │   }
+    ╰────
+  help: Debugger statements are considered harmful in production code
+
+  typescript/no-explicit-any: Unexpected any. Specify a different type.
+    ╭─[src/utils.ts:8:24]
+  7 │ 
+  8 │ function process(data: any) {
+    ·                        ─┬─
+    ·                         ╰── any disables type checking
+  9 │   return data.value;
+    ╰────
+
+✖ 2 problems (2 errors, 0 warnings)
+```
+
+## Install Locally
+
+For regular use, install oxlint in your project:
+
+<Steps>
+
+<Step title="Install oxlint">
+
+Add oxlint as a dev dependency:
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev oxlint
+```
+
+```bash yarn
+yarn add --dev oxlint
+```
+
+```bash pnpm
+pnpm add --save-dev oxlint
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Add npm script">
+
+Update your `package.json` to include a lint script:
+
+```json package.json
+{
+  "scripts": {
+    "lint": "oxlint"
+  }
+}
+```
+
+Now you can run:
+
+```bash
+npm run lint
+```
+
+</Step>
+
+<Step title="Run oxlint">
+
+Lint your entire project:
+
+```bash
+npx oxlint
+```
+
+Or specific files and directories:
+
+```bash
+npx oxlint src/
+npx oxlint src/ tests/
+npx oxlint src/app.ts
+```
+
+</Step>
+
+</Steps>
+
+## Create Configuration File
+
+Customize oxlint's behavior with a configuration file.
+
+<Steps>
+
+<Step title="Initialize configuration">
+
+Create a default configuration file:
+
+```bash
+npx oxlint --init
+```
+
+This creates `.oxlintrc.json` in your project root.
+
+</Step>
+
+<Step title="Configure rules">
+
+Edit `.oxlintrc.json` to customize rules:
+
+```json .oxlintrc.json
+{
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "react",
+    "import",
+    "jsdoc",
+    "node"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "warn"
+  },
+  "rules": {
+    "no-console": "error",
+    "no-debugger": "error",
+    "typescript/no-explicit-any": "warn"
+  }
+}
+```
+
+</Step>
+
+<Step title="Run with configuration">
+
+oxlint automatically detects and uses `.oxlintrc.json`:
+
+```bash
+npx oxlint
+```
+
+Or specify a custom config file:
+
+```bash
+npx oxlint -c path/to/config.json
+```
+
+</Step>
+
+</Steps>
+
+## Common CLI Options
+
+Here are the most frequently used oxlint options:
+
+### Enable/Disable Rules
+
+```bash
+# Deny specific rules or categories
+npx oxlint -D correctness -D no-debugger
+
+# Allow (suppress) specific rules
+npx oxlint -A no-console
+
+# Warn on specific rules
+npx oxlint -W suspicious
+```
+
+### Fix Issues Automatically
+
+```bash
+# Fix safe auto-fixable issues
+npx oxlint --fix
+
+# Apply suggestions (may change behavior)
+npx oxlint --fix-suggestions
+
+# Apply dangerous fixes
+npx oxlint --fix-dangerously
+```
+
+<Warning>
+`--fix-dangerously` may change program behavior. Review changes carefully before committing.
+</Warning>
+
+### Output Formats
+
+```bash
+# Default format (human-readable)
+npx oxlint
+
+# JSON format for programmatic use
+npx oxlint --format json
+
+# GitHub Actions format
+npx oxlint --format github
+
+# Unix format (file:line:column:message)
+npx oxlint --format unix
+```
+
+**Available formats:** `default`, `json`, `stylish`, `unix`, `checkstyle`, `github`, `gitlab`, `junit`
+
+### Enable Plugins
+
+```bash
+# Enable React plugin
+npx oxlint --react-plugin
+
+# Enable import plugin (requires tsconfig)
+npx oxlint --import-plugin --tsconfig tsconfig.json
+
+# Enable JSX a11y plugin
+npx oxlint --jsx-a11y-plugin
+
+# Enable Jest plugin
+npx oxlint --jest-plugin
+```
+
+### Handle Warnings
+
+```bash
+# Disable warnings (errors only)
+npx oxlint --quiet
+
+# Treat warnings as errors
+npx oxlint --deny-warnings
+
+# Set maximum warning threshold
+npx oxlint --max-warnings 10
+```
+
+## Rule Categories
+
+oxlint organizes rules into categories:
+
+<Tabs>
+  <Tab title="correctness">
+    **Code that is outright wrong or useless**
+    
+    Enabled by default. Catches bugs and incorrect code.
+    
+    ```bash
+    # These rules are enabled by default
+    npx oxlint
+    ```
+  </Tab>
+  
+  <Tab title="suspicious">
+    **Code that is most likely wrong or useless**
+    
+    ```bash
+    npx oxlint -D suspicious
+    ```
+  </Tab>
+  
+  <Tab title="pedantic">
+    **Strict lints with occasional false positives**
+    
+    ```bash
+    npx oxlint -D pedantic
+    ```
+  </Tab>
+  
+  <Tab title="perf">
+    **Code that could be more performant**
+    
+    ```bash
+    npx oxlint -D perf
+    ```
+  </Tab>
+  
+  <Tab title="style">
+    **Code style and idioms**
+    
+    ```bash
+    npx oxlint -D style
+    ```
+  </Tab>
+  
+  <Tab title="restriction">
+    **Prevent use of language/library features**
+    
+    ```bash
+    npx oxlint -D restriction
+    ```
+  </Tab>
+  
+  <Tab title="nursery">
+    **New lints still under development**
+    
+    ```bash
+    npx oxlint -D nursery
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration Examples
+
+### Minimal Configuration
+
+```json .oxlintrc.json
+{
+  "rules": {
+    "no-console": "warn",
+    "no-debugger": "error"
+  }
+}
+```
+
+### React Project
+
+```json .oxlintrc.json
+{
+  "plugins": ["react", "react-perf", "jsx-a11y"],
+  "categories": {
+    "correctness": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    "react/jsx-key": "error",
+    "react-perf/jsx-no-new-object-as-prop": "warn"
+  }
+}
+```
+
+### TypeScript Project
+
+```json .oxlintrc.json
+{
+  "plugins": ["typescript", "import"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "warn",
+    "typescript/consistent-indexed-object-style": ["error", "record"],
+    "typescript/ban-ts-comment": [
+      "error",
+      { "ts-expect-error": "allow-with-description" }
+    ]
+  },
+  "options": {
+    "typeAware": true
+  }
+}
+```
+
+### With Ignore Patterns
+
+```json .oxlintrc.json
+{
+  "plugins": ["typescript", "unicorn"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/*.d.ts"
+  ]
+}
+```
+
+## Performance
+
+oxlint is designed for speed. Here's a comparison on the VSCode repository (4800+ files):
+
+```bash
+$ time npx oxlint
+
+✔ Linted 4863 files in 0.7s
+
+real    0m0.712s
+user    0m2.847s
+sys     0m0.156s
+```
+
+oxlint is typically **50-100x faster** than ESLint on large codebases.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Linter Configuration" icon="gear" href="/guide/configuration">
+    Learn about all configuration options
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/api/cli/oxlint">
+    Explore all CLI flags and options
+  </Card>
+  <Card title="Linter Tool" icon="list-check" href="/tools/linter">
+    Learn about oxlint features
+  </Card>
+  <Card title="Formatter" icon="wand-magic-sparkles" href="/tools/formatter">
+    Format your code with oxfmt
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="oxlint is not finding my files">
+    By default, oxlint scans the current directory for JS/TS files. Specify paths explicitly:
+    
+    ```bash
+    npx oxlint src/ tests/
+    ```
+    
+    Check your ignore patterns in `.oxlintrc.json` or `.oxlintignore`.
+  </Accordion>
+  
+  <Accordion title="How do I ignore specific files?">
+    Create a `.oxlintignore` file:
+    
+    ```txt .oxlintignore
+    node_modules
+    dist
+    *.d.ts
+    ```
+    
+    Or use `ignorePatterns` in `.oxlintrc.json`.
+  </Accordion>
+  
+  <Accordion title="Can I use oxlint with ESLint?">
+    Yes! oxlint can run alongside ESLint. Use oxlint for fast checks and ESLint for rules not yet supported by oxlint.
+    
+    ```json package.json
+    {
+      "scripts": {
+        "lint": "oxlint && eslint ."
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="How do I enable type-aware rules?">
+    Add `typeAware: true` to your config:
+    
+    ```json .oxlintrc.json
+    {
+      "options": {
+        "typeAware": true
+      }
+    }
+    ```
+    
+    Or use the `--type-aware` flag:
+    
+    ```bash
+    npx oxlint --type-aware
+    ```
+  </Accordion>
+</AccordionGroup>

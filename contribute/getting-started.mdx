@@ -1,0 +1,239 @@
+---
+title: Getting Started
+description: Set up your development environment and make your first contribution to Oxc
+---
+
+Welcome to the Oxc contributing guide! This page will help you set up your development environment and make your first contribution.
+
+## Prerequisites
+
+Before you begin, ensure you have the following tools installed:
+
+- **Rust**: Minimum version 1.91 (MSRV policy: N-2)
+- **Node.js**: LTS version or later
+- **pnpm**: Package manager for Node.js dependencies
+- **just**: Command runner for development tasks
+
+You can install `just` via cargo:
+
+```bash
+cargo install just
+```
+
+## Quick Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/oxc-project/oxc.git
+    cd oxc
+    ```
+  </Step>
+
+  <Step title="Initialize development tools">
+    This installs required Rust tools and Node.js dependencies:
+    
+    ```bash
+    just init
+    ```
+    
+    This command installs:
+    - `cargo-insta` - Snapshot testing
+    - `typos-cli` - Spell checker
+    - `cargo-shear` - Unused dependency remover
+    - `watchexec-cli` - File watcher
+    - All Node.js dependencies via `pnpm install`
+  </Step>
+
+  <Step title="Clone test submodules">
+    Oxc uses external test suites for conformance testing:
+    
+    ```bash
+    just submodules
+    ```
+    
+    This clones Test262, Babel, TypeScript, and Prettier test suites.
+  </Step>
+
+  <Step title="Build and test">
+    Verify your setup by running tests:
+    
+    ```bash
+    just test
+    ```
+  </Step>
+</Steps>
+
+## Development Commands
+
+### Essential Commands
+
+These are the most frequently used commands during development:
+
+```bash
+just fmt          # Format code (run after modifications)
+just check        # Run cargo check
+just test         # Run unit/integration tests
+just lint         # Run clippy linter
+just conformance  # Run conformance tests
+just ready        # Run all checks (use before commits)
+```
+
+### Crate-Specific Commands
+
+After modifying certain crates, you need to regenerate files:
+
+```bash
+just ast          # Update generated files (oxc_ast changes)
+just minsize      # Update size snapshots (oxc_minifier changes)
+just allocs       # Update allocation snapshots (oxc_parser changes)
+cargo lintgen     # Regenerate linter rules enum (after adding rules)
+```
+
+### Watch Commands
+
+Automatically re-run commands on file changes:
+
+```bash
+just watch "cargo test"
+just watch-check              # Watch cargo check and clippy
+just watch-oxlint test.js     # Watch oxlint on a file
+```
+
+### Example Commands
+
+Run crate examples for quick testing:
+
+```bash
+cargo run -p oxc_parser --example parser -- test.js
+cargo run -p oxc_linter --example linter -- src/
+cargo run -p oxc_transformer --example transformer -- input.js
+cargo run -p oxc --example compiler --features="full" -- test.js
+
+# Or use just shortcuts
+just example parser test.js
+just example linter src/
+```
+
+## Making Your First Contribution
+
+<Steps>
+  <Step title="Find an issue">
+    Browse [good first issues](https://github.com/oxc-project/oxc/contribute) or ask for guidance on [Discord](https://discord.gg/9uXCAwqQZW).
+  </Step>
+
+  <Step title="Create a branch">
+    ```bash
+    git checkout -b fix/issue-description
+    ```
+  </Step>
+
+  <Step title="Make your changes">
+    Edit the code, following the [Architecture](/contribute/architecture) guide.
+    
+    Run tests frequently:
+    ```bash
+    just test
+    ```
+  </Step>
+
+  <Step title="Format and lint">
+    Before committing, ensure your code passes all checks:
+    
+    ```bash
+    just fmt
+    just check
+    just test
+    just lint
+    ```
+    
+    Or run all checks at once:
+    ```bash
+    just ready
+    ```
+  </Step>
+
+  <Step title="Commit your changes">
+    Write a clear commit message describing your changes:
+    
+    ```bash
+    git add .
+    git commit -m "fix(parser): handle edge case in arrow functions"
+    ```
+  </Step>
+
+  <Step title="Push and create a pull request">
+    ```bash
+    git push origin fix/issue-description
+    ```
+    
+    Then create a pull request on GitHub.
+  </Step>
+</Steps>
+
+## AI Usage Policy
+
+<Warning>
+  If you use AI tools (ChatGPT, Claude, Copilot, etc.) to help with your contribution:
+  
+  - **Disclose AI usage** in your pull request to reduce maintainer fatigue
+  - **You are responsible** for all AI-generated code you submit
+  - **Review thoroughly** - Low-quality or unreviewed AI content will be closed immediately
+</Warning>
+
+AI-generated code must be thoroughly reviewed, tested, and understood before submission. It should meet Oxc's performance and quality standards.
+
+## Git Pre-commit Hook
+
+Optionally install a pre-commit hook to automatically format code:
+
+```bash
+just install-hook
+```
+
+This creates a git hook that runs `just fmt` before each commit.
+
+## Troubleshooting
+
+### AST Generation Fails
+
+If `just ast` fails on first run, try running with JS generators disabled first:
+
+```bash
+cargo run -p oxc_ast_tools --no-default-features
+cargo run -p oxc_ast_tools
+```
+
+### Conformance Tests Fail
+
+Ensure submodules are up to date:
+
+```bash
+just submodules
+```
+
+### Build Fails After Pulling Changes
+
+Clean build artifacts and rebuild:
+
+```bash
+cargo clean
+just ready
+```
+
+## Next Steps
+
+- Learn about the [Codebase Architecture](/contribute/architecture)
+- Understand the [Testing Infrastructure](/contribute/testing)
+- Learn how to [Add Linter Rules](/contribute/adding-rules)
+- Read the [FAQ](/contribute/faq) for common questions
+
+## Getting Help
+
+If you need assistance:
+
+- Join our [Discord server](https://discord.gg/9uXCAwqQZW)
+- Ask questions on [GitHub Discussions](https://github.com/oxc-project/oxc/discussions)
+- Review existing [pull requests](https://github.com/oxc-project/oxc/pulls) for examples
+
+We welcome all contributions and are happy to help new contributors get started!

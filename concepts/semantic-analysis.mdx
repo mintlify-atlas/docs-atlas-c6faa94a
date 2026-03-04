@@ -1,0 +1,550 @@
+---
+title: Semantic Analysis
+description: Understanding scope chains, symbol tables, and reference resolution in Oxc
+---
+
+# Semantic Analysis
+
+Semantic analysis is the process of understanding the meaning and relationships within code beyond its syntax. While the parser produces an AST representing the code's structure, the semantic analyzer builds additional data structures that capture scoping, symbol resolution, and control flow.
+
+## Overview
+
+Oxc's semantic analyzer performs comprehensive analysis of JavaScript and TypeScript programs, building:
+
+<CardGroup cols={3}>
+  <Card title="Symbol Table" icon="table">
+    All declared identifiers (variables, functions, classes) with their properties
+  </Card>
+  
+  <Card title="Scope Tree" icon="sitemap">
+    Nested scopes following ECMAScript scoping rules
+  </Card>
+  
+  <Card title="Reference Graph" icon="diagram-project">
+    Links between identifier uses and their declarations
+  </Card>
+</CardGroup>
+
+<Info>
+Semantic analysis bridges the gap between syntax and meaning. It enables tools like linters to detect issues like undefined variables, and transformers to safely rename identifiers.
+</Info>
+
+## Analysis Pipeline
+
+The semantic analyzer runs after parsing:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source_text = r#"
+    const x = 42;
+    function foo() {
+        console.log(x);
+        const y = x + 1;
+        return y;
+    }
+"#;
+
+let source_type = SourceType::default();
+
+// Step 1: Parse
+let ret = Parser::new(&allocator, source_text, source_type).parse();
+let program = ret.program;
+
+// Step 2: Semantic analysis
+let semantic = SemanticBuilder::new()
+    .with_check_syntax_error(true)  // Enable additional syntax checks
+    .with_cfg(true)                 // Build control flow graph (optional)
+    .build(&program);
+
+// The semantic data is now populated
+let scoping = semantic.semantic.scoping();
+```
+
+The analyzer produces:
+- **Symbol table**: What was declared and where
+- **Scope tree**: Lexical scope hierarchy
+- **References**: Links from uses to declarations
+- **Control flow graph** (optional): Program flow analysis
+
+## Scope Tree
+
+The scope tree represents the nested lexical scopes in your code.
+
+### Scope Types
+
+Different language constructs create different types of scopes:
+
+```javascript
+// Program scope (top-level)
+const global = 1;
+
+// Function scope
+function outer() {
+    var functionScoped = 2;
+    
+    // Block scope
+    if (true) {
+        let blockScoped = 3;
+        const alsoBlockScoped = 4;
+    }
+    
+    // Another function scope
+    function inner() {
+        let nested = 5;
+    }
+}
+
+// Class scope
+class MyClass {
+    method() {
+        let methodScope = 6;
+    }
+}
+```
+
+Each scope knows:
+- Its parent scope
+- What bindings (variables) it declares
+- Its scope flags (function, block, strict mode, etc.)
+
+### Accessing Scope Information
+
+```rust
+use oxc_syntax::scope::{ScopeFlags, ScopeId};
+
+let scoping = semantic.semantic.scoping();
+
+// Iterate over all scopes
+for scope_id in scoping.scope_ids() {
+    let flags = scoping.get_flags(scope_id);
+    
+    println!("Scope {:?}:", scope_id);
+    println!("  Is function scope: {}", flags.contains(ScopeFlags::Function));
+    println!("  Is strict mode: {}", flags.contains(ScopeFlags::StrictMode));
+    
+    // Get parent scope
+    if let Some(parent_id) = scoping.get_parent_id(scope_id) {
+        println!("  Parent: {:?}", parent_id);
+    }
+    
+    // Get bindings in this scope
+    if let Some(bindings) = scoping.get_bindings(scope_id) {
+        for (name, symbol_id) in bindings {
+            println!("  Binding: {} -> {:?}", name, symbol_id);
+        }
+    }
+}
+```
+
+### Scope Hierarchy Example
+
+For this code:
+
+```javascript
+const x = 1;
+function foo() {
+    const y = 2;
+    if (true) {
+        const z = 3;
+    }
+}
+```
+
+The scope tree looks like:
+
+```
+Program Scope (id: 0)
+  └─ bindings: { x -> Symbol(0), foo -> Symbol(1) }
+  └─ child:
+      Function Scope (id: 1) [for foo]
+        └─ bindings: { y -> Symbol(2) }
+        └─ child:
+            Block Scope (id: 2) [for if]
+              └─ bindings: { z -> Symbol(3) }
+```
+
+## Symbol Table
+
+The symbol table records every declared identifier in the program.
+
+### Symbol Properties
+
+Each symbol has:
+
+- **Name**: The identifier name
+- **Span**: Source location of declaration
+- **Flags**: Type of declaration (var, let, const, function, class, etc.)
+- **Scope**: Which scope it belongs to
+- **References**: All places it's used
+
+```rust
+use oxc_syntax::symbol::{SymbolFlags, SymbolId};
+
+let scoping = semantic.semantic.scoping();
+
+// Iterate over all symbols
+for symbol_id in scoping.symbol_ids() {
+    let name = scoping.symbol_name(symbol_id);
+    let flags = scoping.symbol_flags(symbol_id);
+    let span = scoping.symbol_span(symbol_id);
+    let scope_id = scoping.symbol_scope(symbol_id);
+    
+    println!("Symbol: {}", name);
+    println!("  ID: {:?}", symbol_id);
+    println!("  Flags: {:?}", flags);
+    println!("  Declared at: {:?}", span);
+    println!("  Scope: {:?}", scope_id);
+    
+    // Check symbol type
+    if flags.contains(SymbolFlags::BlockScopedVariable) {
+        println!("  This is a let/const variable");
+    }
+    if flags.contains(SymbolFlags::Function) {
+        println!("  This is a function");
+    }
+}
+```
+
+### Symbol Flags
+
+Common symbol flags:
+
+- `SymbolFlags::BlockScopedVariable` - `let` or `const`
+- `SymbolFlags::FunctionScopedVariable` - `var`
+- `SymbolFlags::Function` - Function declaration
+- `SymbolFlags::Class` - Class declaration
+- `SymbolFlags::CatchVariable` - Catch clause parameter
+- `SymbolFlags::ConstVariable` - `const` declaration
+- `SymbolFlags::Import` - Import binding
+- `SymbolFlags::Export` - Export declaration
+
+<Note>
+These flags help tools understand how identifiers behave. For example, a linter checking for variable reassignment needs to know if something is declared with `const`.
+</Note>
+
+## Reference Resolution
+
+The semantic analyzer links every identifier reference to its declaration.
+
+### Understanding References
+
+```javascript
+const x = 42;        // Symbol: x (declaration)
+function foo() {
+    console.log(x);  // Reference: x -> Symbol x (read)
+    const y = x + 1; // Reference: x -> Symbol x (read)
+    return y;        // Reference: y -> Symbol y (read)
+}
+foo();              // Reference: foo -> Symbol foo (read)
+```
+
+### Accessing Reference Information
+
+```rust
+use oxc_syntax::reference::{ReferenceFlags, ReferenceId};
+
+let scoping = semantic.semantic.scoping();
+
+// Get all references for a symbol
+for symbol_id in scoping.symbol_ids() {
+    let symbol_name = scoping.symbol_name(symbol_id);
+    println!("Symbol '{}' is referenced at:", symbol_name);
+    
+    for reference_id in scoping.get_resolved_reference_ids(symbol_id) {
+        let reference = scoping.get_reference(*reference_id);
+        let flags = reference.flags();
+        
+        if flags.contains(ReferenceFlags::Read) {
+            println!("  - Read reference");
+        }
+        if flags.contains(ReferenceFlags::Write) {
+            println!("  - Write reference");
+        }
+    }
+}
+```
+
+### Reference Flags
+
+- `ReferenceFlags::Read` - Value is read (e.g., `x` in `y = x`)
+- `ReferenceFlags::Write` - Value is written (e.g., `x` in `x = 5`)
+- `ReferenceFlags::Type` - Used as a type (TypeScript)
+- `ReferenceFlags::Value` - Used as a value
+
+<Info>
+A reference can be both read and write, like `x++` or `x += 1`.
+</Info>
+
+## Practical Example: Finding Unused Variables
+
+Here's how to use semantic analysis to find unused variables:
+
+```rust
+use oxc_allocator::Allocator;
+use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
+use oxc_span::SourceType;
+
+let allocator = Allocator::default();
+let source_text = r#"
+    const used = 1;
+    const unused = 2;
+    
+    function foo() {
+        console.log(used);
+    }
+"#;
+
+let ret = Parser::new(&allocator, source_text, SourceType::default()).parse();
+let semantic = SemanticBuilder::new().build(&ret.program);
+
+let scoping = semantic.semantic.scoping();
+
+// Find symbols with no references
+for symbol_id in scoping.symbol_ids() {
+    let references = scoping.get_resolved_reference_ids(symbol_id);
+    
+    if references.is_empty() {
+        let name = scoping.symbol_name(symbol_id);
+        let span = scoping.symbol_span(symbol_id);
+        println!("Unused variable '{}' at {:?}", name, span);
+    }
+}
+
+// Output: Unused variable 'unused' at Span { start: 37, end: 43 }
+```
+
+## Practical Example: Detecting Unresolved References
+
+```rust
+// Find references to undefined variables
+let unresolved = scoping.root_unresolved_references();
+
+for (name, reference_ids) in unresolved {
+    println!("Unresolved reference: '{}'", name);
+    for reference_id in reference_ids {
+        let reference = scoping.get_reference(*reference_id);
+        println!("  Used at node {:?}", reference.node_id());
+    }
+}
+```
+
+For code like:
+
+```javascript
+function foo() {
+    console.log(undefinedVar);  // undefinedVar is not declared
+}
+```
+
+This will report `undefinedVar` as unresolved.
+
+## Scope Chain Resolution
+
+The semantic analyzer implements ECMAScript scope chain resolution:
+
+```javascript
+const x = 'global';
+
+function outer() {
+    const x = 'outer';
+    
+    function inner() {
+        console.log(x);  // Resolves to 'outer', not 'global'
+    }
+}
+```
+
+When resolving `x` in `inner()`:
+1. Check inner function scope - not found
+2. Check outer function scope - **found!** (resolves here)
+3. (Would check global scope if not found)
+
+<Info>
+This is exactly how JavaScript's scope chain works at runtime. The semantic analyzer replicates this behavior at compile time.
+</Info>
+
+## Integration with AST
+
+Semantic analysis populates fields in the AST:
+
+### BindingIdentifier.symbol_id
+
+```rust
+// After semantic analysis, declarations have symbol_id populated
+if let Statement::VariableDeclaration(decl) = stmt {
+    for declarator in &decl.declarations {
+        if let BindingPatternKind::BindingIdentifier(ident) = &declarator.id.kind {
+            // This is now Some(SymbolId) after semantic analysis
+            if let Some(symbol_id) = ident.symbol_id.get() {
+                println!("Variable '{}' has symbol ID {:?}", 
+                    ident.name, symbol_id);
+            }
+        }
+    }
+}
+```
+
+### IdentifierReference.reference_id
+
+```rust
+// References have reference_id populated
+if let Expression::Identifier(ident) = expr {
+    if let Some(reference_id) = ident.reference_id.get() {
+        let reference = scoping.get_reference(reference_id);
+        println!("Reference '{}':", ident.name);
+        println!("  Flags: {:?}", reference.flags());
+        
+        // Find what it refers to
+        if let Some(symbol_id) = reference.symbol_id() {
+            let symbol_name = scoping.symbol_name(symbol_id);
+            println!("  Resolves to symbol '{}'", symbol_name);
+        }
+    }
+}
+```
+
+## Control Flow Graph (Optional)
+
+When enabled, the semantic analyzer also builds a control flow graph (CFG):
+
+```rust
+use oxc_semantic::SemanticBuilder;
+
+let semantic = SemanticBuilder::new()
+    .with_cfg(true)  // Enable CFG construction
+    .build(&program);
+
+if let Some(cfg) = semantic.semantic.cfg() {
+    // Analyze control flow
+    for basic_block_id in cfg.basic_blocks.iter_enumerated() {
+        let block = &cfg.basic_blocks[basic_block_id];
+        println!("Basic block {:?}:", basic_block_id);
+        println!("  Instructions: {:?}", block.instructions.len());
+    }
+}
+```
+
+<Note>
+The CFG is used for advanced analyses like dead code detection and data flow analysis. Most tools don't need it.
+</Note>
+
+## Data Structures
+
+### Scoping
+
+The main data structure:
+
+```rust
+pub struct Scoping {
+    // Symbol table (stored as struct-of-arrays for efficiency)
+    symbol_table: SymbolTable,
+    
+    // All references in the program
+    references: IndexVec<ReferenceId, Reference>,
+    
+    // Scope tree (stored as struct-of-arrays)
+    scope_table: ScopeTable,
+    
+    // Inner data stored in arena allocator
+    cell: ScopingCell,
+}
+```
+
+<Info>
+**Struct-of-Arrays Design**: Instead of `Vec<Symbol>` where each `Symbol` is a struct with multiple fields, Oxc uses separate vectors for each field. This improves cache locality and reduces memory overhead.
+</Info>
+
+### ScopeTable
+
+Stores all scopes in flat arrays:
+
+```rust
+struct ScopeTable {
+    parent_ids: Vec<Option<ScopeId>>,    // Parent scope for each scope
+    node_ids: Vec<NodeId>,                // AST node that created the scope
+    flags: Vec<ScopeFlags>,               // Scope type and properties
+}
+```
+
+### SymbolTable
+
+Stores all symbols in flat arrays:
+
+```rust
+struct SymbolTable {
+    symbol_spans: Vec<Span>,              // Where declared
+    symbol_flags: Vec<SymbolFlags>,       // Type of declaration
+    symbol_scope_ids: Vec<ScopeId>,       // Which scope it's in
+    symbol_declarations: Vec<NodeId>,     // AST node of declaration
+}
+```
+
+This layout is more cache-friendly than `Vec<Symbol>` because related data is stored contiguously.
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Single Pass" icon="forward">
+    The semantic analyzer completes in a single AST traversal
+  </Card>
+  
+  <Card title="Struct-of-Arrays" icon="table-columns">
+    Improves cache locality and reduces memory overhead
+  </Card>
+  
+  <Card title="Arena Allocated" icon="memory">
+    Bindings and references stored in arena for fast allocation
+  </Card>
+  
+  <Card title="Indexed Access" icon="hashtag">
+    O(1) lookups using symbol/scope/reference IDs
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+Semantic analysis enables many advanced tools:
+
+### Linting
+- Detect undefined variables
+- Find unused variables
+- Check for variable shadowing
+- Validate scope rules
+
+### Transformation
+- Safe variable renaming
+- Scope hoisting
+- Dead code elimination
+- Dependency analysis
+
+### IDE Features
+- Go to definition
+- Find all references
+- Rename refactoring
+- Symbol search
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AST Structure" icon="sitemap" href="/concepts/ast">
+    Learn about the AST that semantic analysis enhances
+  </Card>
+  
+  <Card title="Visitor Pattern" icon="route" href="/concepts/visitor-pattern">
+    Learn how to traverse AST with semantic information
+  </Card>
+  
+  <Card title="Linter API" icon="shield-halved" href="/api/rust/linter">
+    See how the linter uses semantic analysis
+  </Card>
+  
+  <Card title="Transformer API" icon="wand-magic-sparkles" href="/api/rust/transformer">
+    See how the transformer uses semantic analysis
+  </Card>
+</CardGroup>
